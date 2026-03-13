@@ -68,6 +68,7 @@ def ingest(config_path: str = "config.yaml", max_batches: Optional[int] = None):
     cur = conn.cursor()
 
     for source in data_sources:
+        print(f"Streaming from {source}...")
         for batch_idx, batch in enumerate(stream_batches(source, batch_size), start=1):
             rows_to_insert = []
             for row_num, row in batch:
@@ -89,10 +90,11 @@ def ingest(config_path: str = "config.yaml", max_batches: Optional[int] = None):
             )
             conn.commit()
             if max_batches and batch_idx >= max_batches:
-                print(f"  stop after {max_batches} batch(es) for quick run")
+                print('Fast stop')
                 break
 
     conn.close()
+    print(f"Done. SQLite DB: {db_path}")
 
 
 if __name__ == "__main__":
