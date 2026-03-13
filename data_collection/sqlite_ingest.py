@@ -1,5 +1,12 @@
-import json
 import sqlite3
+from pathlib import Path
+from typing import Optional
+import yaml
+
+def load_config(config_path: Path) -> dict:
+    with config_path.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
 
 def init_db(db_path: Path):
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -18,3 +25,23 @@ def init_db(db_path: Path):
     )
     conn.commit()
     return conn
+
+
+def ingest(config_path: str = "config.yaml", max_batches: Optional[int] = None):
+    cfg_path = Path(config_path)
+    cfg = load_config(cfg_path)
+    root = cfg_path.parent
+
+    batch_size = int(cfg["batch"]["size"])
+    dt_col = cfg["columns"]["datetime"]
+    dt_fmt = cfg["columns"].get("datetime_format", "%Y-%m-%d")
+    db_path = root / cfg["storage"]["db_path"]
+    data_sources = [root / src["path"] for src in cfg["data_sources"]]
+
+    conn = init_db(db_path)
+    cur = conn.cursor()
+
+    for source in data_sources:
+        pass
+
+    conn.close()
