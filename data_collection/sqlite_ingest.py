@@ -1,5 +1,7 @@
 import csv
+import json
 import sqlite3
+import argparse
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -42,6 +44,15 @@ def init_db(db_path: Path):
     return conn
 
 
+def parse_event_date(value: str, fmt: str) -> Optional[str]:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, fmt).date().isoformat()
+    except ValueError:
+        return None
+
+
 def ingest(config_path: str = "config.yaml", max_batches: Optional[int] = None):
     cfg_path = Path(config_path)
     cfg = load_config(cfg_path)
@@ -60,3 +71,11 @@ def ingest(config_path: str = "config.yaml", max_batches: Optional[int] = None):
         pass
 
     conn.close()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="config.yaml")
+    parser.add_argument("--max-batches", type=int, default=None)
+    args = parser.parse_args()
+    ingest(args.config, args.max_batches)
