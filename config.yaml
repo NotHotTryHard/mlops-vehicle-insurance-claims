@@ -1,0 +1,33 @@
+data_sources:
+  - path: "datasets/motor_data11-14lats.csv"
+    description: "Motor insurance data 2011-2014"
+  - path: "datasets/motor_data14-2018.csv"
+    description: "Motor insurance data 2014-2018"
+
+columns:
+  target: "CLAIM_PAID"
+  datetime: "INSR_BEGIN"
+  datetime_format: "%d-%b-%y"
+  features:
+    - "SEX"
+    - "EFFECTIVE_YR"
+    - "INSR_TYPE"
+    - "INSURED_VALUE"
+    - "PREMIUM"
+    - "PROD_YEAR"
+    - "SEATS_NUM"
+    - "CARRYING_CAPACITY"
+    - "TYPE_VEHICLE"
+    - "CCM_TON"
+    - "MAKE"
+    - "USAGE"
+  id: "OBJECT_ID"
+  drop:
+    - "INSR_END"
+
+batch:
+  size: 10000
+  sort_by: "INSR_BEGIN"
+
+storage:
+  db_path: "data/raw_data.db"
