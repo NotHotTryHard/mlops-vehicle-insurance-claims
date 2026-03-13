@@ -1,4 +1,6 @@
+import csv
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 import yaml
@@ -6,6 +8,19 @@ import yaml
 def load_config(config_path: Path) -> dict:
     with config_path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def stream_batches(csv_path: Path, batch_size: int):
+    with csv_path.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        batch = []
+        for idx, row in enumerate(reader, start=1):
+            batch.append((idx, row))
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
 
 
 def init_db(db_path: Path):
