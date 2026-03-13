@@ -68,7 +68,29 @@ def ingest(config_path: str = "config.yaml", max_batches: Optional[int] = None):
     cur = conn.cursor()
 
     for source in data_sources:
-        pass
+        for batch_idx, batch in enumerate(stream_batches(source, batch_size), start=1):
+            rows_to_insert = []
+            for row_num, row in batch:
+                rows_to_insert.append(
+                    (
+                        str(source),
+                        row_num,
+                        parse_event_date(row.get(dt_col), dt_fmt),
+                        json.dumps(row, ensure_ascii=False),
+                        datetime.now().isoformat(timespec="seconds"),
+                    )
+                )
+            cur.executemany(
+                """
+                INSERT INTO raw_events (source_path, row_number, event_date, raw_json, loaded_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                rows_to_insert,
+            )
+            conn.commit()
+            if max_batches and batch_idx >= max_batches:
+                print(f"  stop after {max_batches} batch(es) for quick run")
+                break
 
     conn.close()
 
