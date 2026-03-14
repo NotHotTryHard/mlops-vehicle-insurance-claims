@@ -5,6 +5,7 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import tqdm
 import yaml
 
 
@@ -73,7 +74,7 @@ def db_add_tables(config_path: str = "config.yaml", paths: list[Path] = [], max_
 
     for source in data_sources:
         print(f"Streaming from {source}...")
-        for batch_idx, batch in enumerate(stream_batches(source, batch_size), start=1):
+        for batch_idx, batch in tqdm.tqdm(enumerate(stream_batches(source, batch_size), start=1)):
             rows_to_insert = []
             for row_num, row in batch:
                 rows_to_insert.append(
@@ -94,7 +95,7 @@ def db_add_tables(config_path: str = "config.yaml", paths: list[Path] = [], max_
             )
             conn.commit()
             if max_batches and batch_idx >= max_batches:
-                print('Fast stop')
+                print('Early stop')
                 break
 
     conn.close()
