@@ -1,5 +1,4 @@
 data_sources:
-  - path: "datasets/motor_data11-14lats.csv"
   - path: "datasets/motor_data14-2018.csv"
 
 columns:
@@ -28,4 +27,4 @@ batch:
   sort_by: "INSR_BEGIN"
 
 storage:
-  db_path: "data/raw_data.db"
+  db_path: "data/db_sqlite.db"
