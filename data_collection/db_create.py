@@ -7,10 +7,6 @@ from pathlib import Path
 from typing import Optional
 import yaml
 
-def load_config(config_path: Path) -> dict:
-    with config_path.open("r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
-
 
 def stream_batches(csv_path: Path, batch_size: int):
     with csv_path.open("r", encoding="utf-8", newline="") as f:
@@ -25,7 +21,7 @@ def stream_batches(csv_path: Path, batch_size: int):
             yield batch
 
 
-def init_db(db_path: Path):
+def db_init(db_path: Path):
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.execute(
@@ -53,7 +49,12 @@ def parse_event_date(value: str, fmt: str) -> Optional[str]:
         return None
 
 
-def ingest(config_path: str = "config.yaml", max_batches: Optional[int] = None):
+def load_config(config_path: Path) -> dict:
+    with config_path.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def db_add_tables(config_path: str = "config.yaml", paths: list[Path] = [], max_batches: Optional[int] = None):
     cfg_path = Path(config_path)
     cfg = load_config(cfg_path)
     root = cfg_path.parent
@@ -62,9 +63,12 @@ def ingest(config_path: str = "config.yaml", max_batches: Optional[int] = None):
     dt_col = cfg["columns"]["datetime"]
     dt_fmt = cfg["columns"].get("datetime_format", "%Y-%m-%d")
     db_path = root / cfg["storage"]["db_path"]
-    data_sources = [root / src["path"] for src in cfg["data_sources"]]
+    if paths:
+        data_sources = paths
+    else:
+        data_sources = [root / src["path"] for src in cfg["data_sources"]]
 
-    conn = init_db(db_path)
+    conn = db_init(db_path)
     cur = conn.cursor()
 
     for source in data_sources:
@@ -102,4 +106,4 @@ if __name__ == "__main__":
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--max-batches", type=int, default=None)
     args = parser.parse_args()
-    ingest(args.config, args.max_batches)
+    db_add_tables(config_path=args.config, max_batches=args.max_batches)

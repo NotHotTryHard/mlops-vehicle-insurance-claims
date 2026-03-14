@@ -1,8 +1,6 @@
 data_sources:
   - path: "datasets/motor_data11-14lats.csv"
-    description: "Motor insurance data 2011-2014"
   - path: "datasets/motor_data14-2018.csv"
-    description: "Motor insurance data 2014-2018"
 
 columns:
   target: "CLAIM_PAID"
