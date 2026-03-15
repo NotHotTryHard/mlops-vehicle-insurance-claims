@@ -1,6 +1,6 @@
 import json
 import sqlite3
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterator, Optional
 
@@ -10,6 +10,14 @@ import yaml
 def load_config(config_path: Path) -> dict:
     with config_path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def parse_input_date(value: str, fallback_fmt: str) -> str:
+    raw = value.strip()
+    try:
+        return date.fromisoformat(raw).isoformat()
+    except ValueError:
+        return datetime.strptime(raw, fallback_fmt).date().isoformat()
 
 
 def db_stream(
@@ -26,12 +34,12 @@ def db_stream(
     target = cfg["columns"]["target"]
     db_path = root / cfg["storage"]["db_path"]
     fetch_size = batch_size or int(cfg["batch"]["size"])
+    dt_fmt = cfg["columns"].get("datetime_format", "%Y-%m-%d")
 
     effective_date_ge = None
     if date_ge:
-        effective_date_ge = (
-            date.fromisoformat(date_ge) + timedelta(days=date_ge_shift_days)
-        ).isoformat()
+        base_date = parse_input_date(date_ge, dt_fmt)
+        effective_date_ge = (date.fromisoformat(base_date) + timedelta(days=date_ge_shift_days)).isoformat()
 
     query = "SELECT raw_json FROM raw_events"
     params: list[str] = []
