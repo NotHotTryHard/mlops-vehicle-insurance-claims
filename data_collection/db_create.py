@@ -6,10 +6,7 @@ from datetime import datetime
 from pathlib import Path
 import tqdm
 
-try:
-    from data_collection.utils import load_config, parse_date
-except ImportError:
-    from utils import load_config, parse_date
+from data_collection.utils import load_config, parse_date
 
 
 def stream_batches(csv_path, batch_size):
