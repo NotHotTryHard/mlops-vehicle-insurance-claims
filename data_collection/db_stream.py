@@ -3,10 +3,7 @@ import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
 
-try:
-    from data_collection.utils import load_config, parse_date
-except ImportError:
-    from utils import load_config, parse_date
+from data_collection.utils import load_config, parse_date
 
 
 def db_stream(
