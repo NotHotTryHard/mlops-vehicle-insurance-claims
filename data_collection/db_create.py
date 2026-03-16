@@ -4,12 +4,11 @@ import sqlite3
 import argparse
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 import tqdm
 import yaml
 
 
-def stream_batches(csv_path: Path, batch_size: int):
+def stream_batches(csv_path, batch_size):
     with csv_path.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         batch = []
@@ -22,7 +21,7 @@ def stream_batches(csv_path: Path, batch_size: int):
             yield batch
 
 
-def db_init(db_path: Path):
+def db_init(db_path):
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.execute(
@@ -41,7 +40,7 @@ def db_init(db_path: Path):
     return conn
 
 
-def parse_event_date(value: str, fmt: str) -> Optional[str]:
+def parse_event_date(value, fmt):
     if not value:
         return None
     try:
@@ -50,12 +49,12 @@ def parse_event_date(value: str, fmt: str) -> Optional[str]:
         return None
 
 
-def load_config(config_path: Path) -> dict:
+def load_config(config_path):
     with config_path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
-def db_add_tables(config_path: str = "config.yaml", paths: list[Path] = [], max_batches: Optional[int] = None):
+def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
     cfg_path = Path(config_path)
     cfg = load_config(cfg_path)
     root = cfg_path.parent

@@ -2,17 +2,16 @@ import json
 import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Iterator, Optional
 
 import yaml
 
 
-def load_config(config_path: Path) -> dict:
+def load_config(config_path):
     with config_path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
-def parse_input_date(value: str, fallback_fmt: str) -> str:
+def parse_input_date(value, fallback_fmt):
     raw = value.strip()
     try:
         return date.fromisoformat(raw).isoformat()
@@ -21,11 +20,11 @@ def parse_input_date(value: str, fallback_fmt: str) -> str:
 
 
 def db_stream(
-    config_path: str = "config.yaml",
-    batch_size: Optional[int] = None,
-    date_ge: Optional[str] = None,
-    date_ge_shift_days: int = 0,
-) -> Iterator[tuple[list[dict], list]]:
+    config_path="config.yaml",
+    batch_size=None,
+    date_ge=None,
+    date_ge_shift_days=0,
+):
     cfg_path = Path(config_path)
     cfg = load_config(cfg_path)
     root = cfg_path.parent
@@ -42,7 +41,7 @@ def db_stream(
         effective_date_ge = (date.fromisoformat(base_date) + timedelta(days=date_ge_shift_days)).isoformat()
 
     query = "SELECT raw_json FROM raw_events"
-    params: list[str] = []
+    params = []
     if effective_date_ge:
         query += " WHERE event_date IS NOT NULL AND event_date >= ?"
         params.append(effective_date_ge)
