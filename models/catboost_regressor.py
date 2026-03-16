@@ -1,6 +1,7 @@
 from catboost import CatBoostRegressor
+from .base import BaseRegressor
 
-class CatBoostRegressionModel:
+class CatBoostRegressionModel(BaseRegressor):
 
     def __init__(self, **kwargs):
         params = {

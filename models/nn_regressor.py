@@ -1,6 +1,7 @@
 from sklearn.neural_network import MLPRegressor
+from .base import BaseRegressor
 
-class MLPRegressionModel:
+class MLPRegressionModel(BaseRegressor):
 
     def __init__(self, **kwargs):
         default_params = {
