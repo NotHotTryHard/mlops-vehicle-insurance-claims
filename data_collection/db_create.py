@@ -5,7 +5,11 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 import tqdm
-import yaml
+
+try:
+    from data_collection.utils import load_config, parse_date
+except ImportError:
+    from utils import load_config, parse_date
 
 
 def stream_batches(csv_path, batch_size):
@@ -40,20 +44,6 @@ def db_init(db_path):
     return conn
 
 
-def parse_event_date(value, fmt):
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, fmt).date().isoformat()
-    except ValueError:
-        return None
-
-
-def load_config(config_path):
-    with config_path.open("r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
-
-
 def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
     cfg_path = Path(config_path)
     cfg = load_config(cfg_path)
@@ -74,17 +64,17 @@ def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
     for source in data_sources:
         print(f"Streaming from {source}...")
         for batch_idx, batch in tqdm.tqdm(enumerate(stream_batches(source, batch_size), start=1)):
-            rows_to_insert = []
-            for row_num, row in batch:
-                rows_to_insert.append(
-                    (
-                        str(source),
-                        row_num,
-                        parse_event_date(row.get(dt_col), dt_fmt),
-                        json.dumps(row, ensure_ascii=False),
-                        datetime.now().isoformat(timespec="seconds"),
-                    )
+            loaded_at = datetime.now().isoformat(timespec="seconds")
+            rows_to_insert = [
+                (
+                    str(source),
+                    row_num,
+                    parse_date(row.get(dt_col), dt_fmt, strict=False),
+                    json.dumps(row, ensure_ascii=False),
+                    loaded_at,
                 )
+                for row_num, row in batch
+            ]
             cur.executemany(
                 """
                 INSERT INTO raw_events (source_path, row_number, event_date, raw_json, loaded_at)
