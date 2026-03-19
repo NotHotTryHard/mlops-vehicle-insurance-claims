@@ -6,7 +6,8 @@ from datetime import datetime
 from pathlib import Path
 import tqdm
 
-from data_collection.utils import load_config, parse_date
+from .utils import load_config, parse_date
+from .meta import DataMeta
 
 
 def stream_batches(csv_path, batch_size):
@@ -58,6 +59,7 @@ def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
     conn = db_init(db_path)
     cur = conn.cursor()
 
+    meta = DataMeta(dt_col=dt_col, dt_fmt=dt_fmt)
     for source in data_sources:
         print(f"Streaming from {source}...")
         for batch_idx, batch in tqdm.tqdm(enumerate(stream_batches(source, batch_size), start=1)):
@@ -80,12 +82,15 @@ def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
                 rows_to_insert,
             )
             conn.commit()
+
+            meta.update(batch)
             if max_batches and batch_idx >= max_batches:
                 print('Early stop')
                 break
 
     conn.close()
     print(f"Done. SQLite DB: {db_path}")
+    print(meta)
 
 
 if __name__ == "__main__":
