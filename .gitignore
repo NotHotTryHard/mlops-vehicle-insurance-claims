@@ -1,6 +1,5 @@
 # Raw data store (SQLite)
-data/
-#datasets/
+data/database
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

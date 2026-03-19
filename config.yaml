@@ -1,5 +1,6 @@
 data_sources:
-  - path: "datasets/motor_data14-2018.csv"
+  - path: "data/datasets/motor_data14-2018.csv"
+  - path: "data/datasets/motor_data11-14lats.csv"
 
 columns:
   target: "CLAIM_PAID"
@@ -27,4 +28,4 @@ batch:
   sort_by: "INSR_BEGIN"
 
 storage:
-  db_path: "data/db_sqlite.db"
+  db_path: "data/database/db_sqlite.db"
