@@ -71,7 +71,7 @@ def load_training_data_ready(csv_path, feature_cols, target_col):
             categorical_cols.append(col)
 
     rows_count = len(X_raw)
-    numeric_part = np.zeros((rows_count, len(numeric_cols)), dtype=np.float64)
+    numeric_part = np.zeros((rows_count, len(numeric_cols)), dtype=np.float32)
     for j, col in enumerate(numeric_cols):
         numeric_part[:, j] = [float(row[col]) for row in X_raw]
 
@@ -81,13 +81,13 @@ def load_training_data_ready(csv_path, feature_cols, target_col):
         for value in values:
             one_hot_cols.append((col, value))
 
-    cat_part = np.zeros((rows_count, len(one_hot_cols)), dtype=np.float64)
+    cat_part = np.zeros((rows_count, len(one_hot_cols)), dtype=np.float32)
     for i, row in enumerate(X_raw):
         for j, (col, value) in enumerate(one_hot_cols):
             if row[col] == value:
                 cat_part[i, j] = 1.0
 
     X = np.concatenate([numeric_part, cat_part], axis=1)
-    y = np.array([float(v) for v in y_raw], dtype=np.float64)
+    y = np.array([float(v) for v in y_raw], dtype=np.float32)
 
     return X, y
