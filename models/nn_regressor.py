@@ -12,7 +12,7 @@ class MLPRegressionModel(BaseRegressor):
             "hidden_layer_sizes": (64, 32),
             "activation": "relu",
             "solver": "adam",
-            "max_iter": 300,
+            "max_iter": 200,
             "random_state": 42,
         }
         default_params.update(kwargs)
