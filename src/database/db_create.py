@@ -91,6 +91,25 @@ def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
     print(f"Done. SQLite DB: {db_path}")
 
 
+def ensure_db():
+    config_path = "config.yaml"
+    cfg = load_config(config_path)
+    db_path = Path(config_path).parent / cfg["data_storage"]["data_path"]
+
+    if db_path.exists():
+        conn = sqlite3.connect(db_path)
+        try:
+            (count,) = conn.execute("SELECT COUNT(*) FROM raw_events").fetchone()
+        finally:
+            conn.close()
+
+        if count > 0:
+            return
+
+    print("DB not found or empty - loading data from config sources...")
+    db_add_tables(config_path)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config.yaml")

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import click
 
-from src.database import db_clear, load_config, load_raw
+from src.database import db_clear, ensure_db, load_config, load_raw
 from src.models import CatBoostRegressionModel, MLPRegressionModel
 from src.preprocessing import NumericOnlyPreprocessor
 
@@ -84,6 +84,9 @@ def val_call(path_csv: Path, old_model: str, models_path: Path) -> None:
     help="Clear database and model files",
 )
 def cli(mode, path_csv, date_until, old_model, new_model, clear):
+    if not clear:
+        ensure_db()
+
     if clear:
         db_clear()
         # model_stash_clear()
