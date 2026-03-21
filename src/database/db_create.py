@@ -7,10 +7,9 @@ from pathlib import Path
 import tqdm
 
 try:
-    from database.utils import load_config, parse_date
+    from .utils import load_config, parse_date
 except ImportError:
-    from utils import load_config, parse_date  # без этого не запускается python dataa_collection/db_create.py
-                                               # так как в sys.path добавляется database, а не корень
+    from utils import load_config, parse_date  # python src/database/db_create.py из каталога database
 
 
 def stream_batches(csv_path, batch_size):

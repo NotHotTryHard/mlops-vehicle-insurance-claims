@@ -4,9 +4,9 @@ from pathlib import Path
 
 import click
 
-from database import db_clear, load_config, load_raw
-from models import CatBoostRegressionModel, MLPRegressionModel
-from preprocessing import NumericOnlyPreprocessor
+from src.database import db_clear, load_config, load_raw
+from src.models import CatBoostRegressionModel, MLPRegressionModel
+from src.preprocessing import NumericOnlyPreprocessor
 
 _MODEL_TO_CLASS = {
     "catboost": CatBoostRegressionModel,

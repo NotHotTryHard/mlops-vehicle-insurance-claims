@@ -3,10 +3,9 @@ import sys
 from pathlib import Path
 
 try:
-    from database.utils import load_config
+    from .utils import load_config
 except ImportError:
-    from utils import load_config  # без этого не запускается python database/db_clear.py
-                                   # так как в sys.path добавляется database, а не корень
+    from utils import load_config  # python src/database/db_clear.py из каталога database
 
 
 def db_clear(config_path="config.yaml"):

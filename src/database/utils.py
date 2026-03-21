@@ -55,7 +55,7 @@ def load_raw_csv(csv_path):
 
 
 def load_raw(path_csv=None):
-    from database.db_stream import db_stream
+    from .db_stream import db_stream
 
     if path_csv:
         X_raw, y_raw = load_raw_csv(str(path_csv))
