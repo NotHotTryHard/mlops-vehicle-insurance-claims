@@ -1,4 +1,5 @@
 from catboost import CatBoostRegressor
+
 from .base import BaseRegressor
 
 
