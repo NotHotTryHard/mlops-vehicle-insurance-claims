@@ -6,6 +6,7 @@ from .base import BaseRegressor
 class CatBoostRegressionModel(BaseRegressor):
 
     def __init__(self, **kwargs):
+        super().__init__()
         params = {
             "loss_function": "RMSE",
             "verbose": False,

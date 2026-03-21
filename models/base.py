@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 import numpy as np
 from sklearn.metrics import r2_score
@@ -6,6 +7,10 @@ from sklearn.model_selection import train_test_split
 
 
 class BaseRegressor(ABC):
+
+    def __init__(self):
+        self.metrics: dict | None = None
+        self.trained_at: str | None = None
 
     @abstractmethod
     def fit(self, X, y):
@@ -22,7 +27,9 @@ class BaseRegressor(ABC):
         y_train_log = self._transform_target(y_train)
         self.fit(X_train, y_train_log)
         self._resid_var = float(np.var(y_train_log - self.predict(X_train)))
-        return self.evaluate(X_test, y_test)
+        self.metrics = self.evaluate(X_test, y_test)
+        self.trained_at = datetime.now().isoformat(timespec="seconds")
+        return self.metrics
 
     def evaluate(self, X, y):
         preds = self._inverse_transform_target(self.predict(X))

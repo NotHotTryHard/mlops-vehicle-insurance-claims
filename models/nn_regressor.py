@@ -40,6 +40,7 @@ class MLPRegressionModel(BaseRegressor):
         val_fraction=0.1,
         random_state=42,
     ):
+        super().__init__()
         self.hidden_layer_sizes = hidden_layer_sizes
         self.lr = lr
         self.max_epochs = max_epochs

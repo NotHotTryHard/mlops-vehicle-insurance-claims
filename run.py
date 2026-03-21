@@ -47,7 +47,7 @@ def val_call(path_csv: Path, old_model: str, models_path: Path) -> None:
 @click.option(
     "--mode",
     type=click.Choice(["train", "val", "add_data"]),
-    required=True,
+    default=None,
     help="train | val | add_data",
 )
 @click.option(
@@ -79,7 +79,7 @@ def val_call(path_csv: Path, old_model: str, models_path: Path) -> None:
 )
 @click.option(
     '--clear',
-    type=bool,
+    is_flag=True,
     default=False,
     help="Clear database and model files",
 )
@@ -88,6 +88,9 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear):
         db_clear()
         # model_stash_clear()
         return
+
+    if mode is None:
+        raise click.UsageError("Missing option '--mode'.")
 
     if mode == "add_data":
         if path_csv is None:
