@@ -63,6 +63,7 @@ python run.py --mode val --path-csv datasets/motor_data14-2018.csv --old catboos
 
 # Очистить БД
 python run.py --clear
+```
 
 ## Установка
 
@@ -72,4 +73,3 @@ python run.py --clear
 uv venv .venv --python 3.10
 source .venv/bin/activate      # или .venv\Scripts\activate
 uv pip install -r requirements.txt
-```
