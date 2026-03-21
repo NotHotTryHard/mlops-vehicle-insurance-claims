@@ -2,6 +2,8 @@ from pathlib import Path
 
 import click
 
+from data_collection import db_clear
+
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
