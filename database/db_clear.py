@@ -3,10 +3,10 @@ import sys
 from pathlib import Path
 
 try:
-    from data_collection.utils import load_config
+    from database.utils import load_config
 except ImportError:
-    from utils import load_config  # без этого не запускается python data_collection/db_clear.py
-                                   # так как в sys.path добавляется data_collection, а не корень
+    from utils import load_config  # без этого не запускается python database/db_clear.py
+                                   # так как в sys.path добавляется database, а не корень
 
 
 def db_clear(config_path="config.yaml"):

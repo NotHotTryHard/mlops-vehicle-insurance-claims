@@ -3,16 +3,15 @@ import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
 
-from data_collection.utils import load_config, parse_date
+from database.utils import load_config, parse_date
 
 
 def db_stream(
-    config_path="config.yaml",
     batch_size=None,
     date_ge=None,
     date_ge_shift_days=0,
 ):
-    cfg_path = Path(config_path)
+    cfg_path = Path("config.yaml")
     cfg = load_config(cfg_path)
     root = cfg_path.parent
 
