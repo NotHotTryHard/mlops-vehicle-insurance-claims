@@ -23,7 +23,12 @@ import click
     metavar="START END",
     help="Date range",
 )
-@click.option("--old", "old_model", type=str, default=None, help="Existing model name")
+@click.option("--old",
+    "old_model",
+    type=str,
+    default=None,
+    help="Existing model name",
+)
 @click.option(
     "--new",
     "new_model",
@@ -31,7 +36,18 @@ import click
     default=None,
     help="New model type",
 )
-def cli(mode, path_csv, date_range, old_model, new_model):
+@click.option(
+    '--clear',
+    type=bool,
+    default=False,
+    help="Clear database and model files",
+)
+def cli(mode, path_csv, date_range, old_model, new_model, clear):
+    if clear:
+        db_clear()
+        # model_stash_clear()
+        return
+
     if mode == "add_data":
         if path_csv is None:
             raise click.UsageError("add_data requires --path-csv.")
@@ -51,6 +67,7 @@ def cli(mode, path_csv, date_range, old_model, new_model):
         raise click.UsageError(
             "train and val require exactly one of --old or --new."
         )
+
 
 
 if __name__ == "__main__":

@@ -52,9 +52,7 @@ def load_training_data_quick(csv_path, feature_cols, target_col):
     return X, y
 
 
-def load_training_data_ready(csv_path, feature_cols, target_col):
-    X_raw, y_raw = load_training_data_quick(csv_path, feature_cols, target_col)
-
+def rows_to_training_arrays(X_raw, y_raw, feature_cols):
     numeric_cols = []
     categorical_cols = []
     for col in feature_cols:

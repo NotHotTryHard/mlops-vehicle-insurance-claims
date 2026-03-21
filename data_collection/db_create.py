@@ -6,7 +6,11 @@ from datetime import datetime
 from pathlib import Path
 import tqdm
 
-from data_collection.utils import load_config, parse_date
+try:
+    from data_collection.utils import load_config, parse_date
+except ImportError:
+    from utils import load_config, parse_date  # без этого не запускается python dataa_collection/db_create.py
+                                               # так как в sys.path добавляется data_collection, а не корень
 
 
 def stream_batches(csv_path, batch_size):
