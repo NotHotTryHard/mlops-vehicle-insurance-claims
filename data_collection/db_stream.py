@@ -18,7 +18,7 @@ def db_stream(
 
     features = cfg["columns"]["features"]
     target = cfg["columns"]["target"]
-    db_path = root / cfg["storage"]["db_path"]
+    db_path = root / cfg["data_storage"]["data_path"]
     fetch_size = batch_size or int(cfg["batch"]["size"])
     dt_fmt = cfg["columns"].get("datetime_format", "%Y-%m-%d")
 

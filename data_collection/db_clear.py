@@ -12,7 +12,7 @@ except ImportError:
 def db_clear(config_path="config.yaml"):
     cfg_path = Path(config_path)
     cfg = load_config(cfg_path)
-    db_path = cfg_path.parent / cfg["storage"]["db_path"]
+    db_path = cfg_path.parent / cfg["data_storage"]["data_path"]
 
     if not db_path.exists():
         print(f"Database not found: {db_path}")

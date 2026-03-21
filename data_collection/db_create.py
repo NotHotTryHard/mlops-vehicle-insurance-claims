@@ -53,7 +53,7 @@ def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
     batch_size = int(cfg["batch"]["size"])
     dt_col = cfg["columns"]["datetime"]
     dt_fmt = cfg["columns"].get("datetime_format", "%Y-%m-%d")
-    db_path = root / cfg["storage"]["db_path"]
+    db_path = root / cfg["data_storage"]["data_path"]
     if paths:
         data_sources = paths
     else:

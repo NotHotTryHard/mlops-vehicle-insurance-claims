@@ -184,4 +184,5 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-catboost_info/** 
+catboost_info/**
+session/**

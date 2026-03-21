@@ -26,5 +26,8 @@ batch:
   size: 10000
   sort_by: "INSR_BEGIN"
 
-storage:
-  db_path: "data/db_sqlite.db"
+data_storage:
+  data_path: "session/data/db_sqlite.db"
+
+model_storage:
+  models_path: "session/models"
