@@ -14,7 +14,12 @@ def _is_numeric(value):
 class NumericOnlyPreprocessor(BasePreprocessor):
 
     def fit(self, X):
-        self._cols = [k for k, v in X[0].items() if _is_numeric(v)]
+        candidates = set(X[0].keys())
+        for row in X:
+            candidates -= {k for k in candidates if not _is_numeric(row[k])}
+            if not candidates:
+                break
+        self._cols = [k for k in X[0] if k in candidates]
         return self
 
     def transform(self, X):
