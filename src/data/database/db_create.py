@@ -7,8 +7,7 @@ from pathlib import Path
 import tqdm
 
 from src.data.utils import load_config, parse_date
-from .stats import DataStatsAnalyzer
-from .meta import DataMetaAnalyzer
+from src.data.quality import DataStatsAnalyzer, DataMetaAnalyzer
 
 
 def stream_batches(csv_path, batch_size):
