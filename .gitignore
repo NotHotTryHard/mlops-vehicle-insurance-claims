@@ -1,5 +1,5 @@
 # Raw data store (SQLite)
-data/
+#data/
 #datasets/
 
 # Byte-compiled / optimized / DLL files

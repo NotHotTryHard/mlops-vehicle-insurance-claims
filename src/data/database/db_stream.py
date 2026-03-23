@@ -3,7 +3,7 @@ import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
 
-from .utils import load_config, parse_date
+from src.data.utils import load_config, parse_date
 
 
 def db_stream(
@@ -42,13 +42,8 @@ def db_stream(
             if not rows:
                 break
 
-            x_batch = []
-            y_batch = []
             for (raw_json,) in rows:
                 record = json.loads(raw_json)
-                x_batch.append({col: record.get(col) for col in features})
-                y_batch.append(record.get(target))
-
-            yield x_batch, y_batch
+            yield record
     finally:
         conn.close()

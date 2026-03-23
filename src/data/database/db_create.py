@@ -6,10 +6,9 @@ from datetime import datetime
 from pathlib import Path
 import tqdm
 
-try:
-    from .utils import load_config, parse_date
-except ImportError:
-    from utils import load_config, parse_date  # python src/database/db_create.py из каталога database
+from src.data.utils import load_config, parse_date
+from .stats import DataStatsAnalyzer
+from .meta import DataMetaAnalyzer
 
 
 def stream_batches(csv_path, batch_size):
@@ -61,10 +60,14 @@ def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
     conn = db_init(db_path)
     cur = conn.cursor()
 
+    stats_analyzer = DataStatsAnalyzer(cfg)
+    meta_analyzer = DataMetaAnalyzer()
     for source in data_sources:
         print(f"Streaming from {source}...")
         for batch_idx, batch in tqdm.tqdm(enumerate(stream_batches(source, batch_size), start=1)):
             loaded_at = datetime.now().isoformat(timespec="seconds")
+            stats_analyzer.update(batch)
+            meta_analyzer.update(batch)
             rows_to_insert = [
                 (
                     str(source),
@@ -89,6 +92,10 @@ def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
 
     conn.close()
     print(f"Done. SQLite DB: {db_path}")
+    print(meta_analyzer)
+    stats_analyzer.finalize_stats()
+    stats_analyzer.save_stats()
+    print(f"Statistics was saved into {cfg["data_storage"]["statistics_path"]}")
 
 
 def ensure_db():

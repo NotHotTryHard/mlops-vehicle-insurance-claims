@@ -37,7 +37,7 @@ def parse_date(value, fmt, strict=True):
 
 def load_raw_csv(csv_path):
     cfg = load_config("config.yaml")
-    feature_cols = cfg["columns"]["features"]
+    feature_cols = get_all_features(cfg)
     target_col = cfg["columns"]["target"]
     csv_path = Path(csv_path)
     X, y = [], []
@@ -48,14 +48,13 @@ def load_raw_csv(csv_path):
         for row in reader:
             if any(row.get(col, "") == "" for col in required_cols):
                 continue
-            X.append({col: row[col] for col in feature_cols})
-            y.append(row[target_col])
+            X.append({col: row[col] for col in feature_cols or col in target_col})
 
     return X, y
 
 
 def load_raw(path_csv=None):
-    from .db_stream import db_stream
+    from src.data.database.db_stream import db_stream
 
     if path_csv:
         X_raw, y_raw = load_raw_csv(str(path_csv))
@@ -68,3 +67,9 @@ def load_raw(path_csv=None):
                 all_x.append(x)
                 all_y.append(y)
     return all_x, np.array([float(v) for v in all_y], dtype=np.float32)
+
+def get_all_features(cfg):
+    features = []
+    for x in cfg["columns"]["features"].values():
+        features.extend(x)
+    return features

@@ -4,7 +4,8 @@ from pathlib import Path
 
 import click
 
-from src.database import db_clear, ensure_db, load_config, load_raw
+from src.data.database import db_clear, ensure_db
+from src.data.utils import load_config, load_raw
 from src.models import CatBoostRegressionModel, MLPRegressionModel
 from src.preprocessing import NumericOnlyPreprocessor
 
