@@ -37,6 +37,7 @@ def db_stream(
     cur = conn.cursor()
     cur.execute(query, params)
     try:
+        batch = []
         while True:
             rows = cur.fetchmany(fetch_size)
             if not rows:
@@ -44,6 +45,11 @@ def db_stream(
 
             for (raw_json,) in rows:
                 record = json.loads(raw_json)
-            yield record
+                batch.append(record)
+            if len(batch) == batch_size:
+                yield batch
+                batch = []
     finally:
+        if len(batch):
+            yield batch
         conn.close()
