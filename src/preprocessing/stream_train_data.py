@@ -234,6 +234,17 @@ def cat_features_from_frame(df):
     return [c for c in df.columns if isinstance(df[c].dtype, pd.CategoricalDtype)]
 
 
+def concat_xy_batches(parts_x, parts_y, model_kind):
+    """Merge batch outputs from ``features_xy_for_model`` (CatBoost DataFrame vs MLP ndarray)."""
+    if not parts_x:
+        raise ValueError("No batches to concatenate.")
+    y = np.concatenate(parts_y)
+    if model_kind == "catboost":
+        return pd.concat(parts_x, ignore_index=True), y
+    stacked = np.vstack([np.asarray(x, dtype=np.float32) for x in parts_x])
+    return stacked, y
+
+
 def features_xy_for_model(preprocessor, X_rows, y, cfg):
     """
     Same preprocessing for train and validation: target fill, then ``transform_frame``.
@@ -245,6 +256,46 @@ def features_xy_for_model(preprocessor, X_rows, y, cfg):
     if preprocessor.model_kind == "catboost":
         return X, y
     return X.values.astype(np.float32), y
+
+
+def accumulate_xy_from_cleaned_db(
+    config_path="config.yaml",
+    model_name="catboost",
+    *,
+    date_ge=None,
+    date_le=None,
+):
+    """
+    Train path: cleaned DB batches → FE → fit ``TrainMatrixPreprocessor`` on first batch →
+    concatenate ``(X, y)`` like a single in-memory train set.
+    """
+    from src.data.quality.clean import stream_cleaned_batches
+
+    cfg = load_config(Path(config_path).resolve())
+    target_col = cfg["columns"]["target"]
+    preprocessor = make_train_matrix_preprocessor(cfg, model_name, config_path=config_path)
+    first = True
+    parts_x, parts_y = [], []
+    for batch in stream_cleaned_batches(
+        config_path, date_ge=date_ge, date_le=date_le
+    ):
+        if not batch:
+            continue
+        batch = apply_feature_engineering_rows(cfg, batch)
+        if first:
+            preprocessor.fit(batch)
+            first = False
+        y = target_vector_from_rows(batch, target_col, cfg)
+        Xb, yb = features_xy_for_model(preprocessor, batch, y, cfg)
+        parts_x.append(Xb)
+        parts_y.append(yb)
+    if first:
+        raise ValueError(
+            "No cleaned rows in DB for the given date filters. "
+            "Load data (add_data) and run the quality pipeline first."
+        )
+    X, y = concat_xy_batches(parts_x, parts_y, model_name)
+    return preprocessor, X, y
 
 
 def make_train_matrix_preprocessor(cfg, model_name, config_path="config.yaml"):
@@ -276,11 +327,16 @@ def stream_full_train_pipeline(config_path="config.yaml", model_name="catboost")
             preprocessor.fit(batch)
             first = False
         y = target_vector_from_rows(batch, target_col, cfg)
-        X = preprocessor.transform_frame(batch)
-        yield X, y
+        yield features_xy_for_model(preprocessor, batch, y, cfg)
 
 
-def stream_full_val_pipeline(config_path="config.yaml", *, preprocessor):
+def stream_full_val_pipeline(
+    config_path="config.yaml",
+    *,
+    preprocessor,
+    date_ge=None,
+    date_le=None,
+):
     """
     Validation streaming: cleaned DB batches only (``stream_cleaned_batches``), no quality report
     or cleaning-summary step. Pass a **fitted** preprocessor (e.g. from a saved train bundle).
@@ -292,9 +348,46 @@ def stream_full_val_pipeline(config_path="config.yaml", *, preprocessor):
 
     cfg = load_config(Path(config_path).resolve())
     target_col = cfg["columns"]["target"]
-    for batch in stream_cleaned_batches(config_path):
+    for batch in stream_cleaned_batches(
+        config_path, date_ge=date_ge, date_le=date_le
+    ):
         if not batch:
             continue
         batch = apply_feature_engineering_rows(cfg, batch)
         y = target_vector_from_rows(batch, target_col, cfg)
         yield features_xy_for_model(preprocessor, batch, y, cfg)
+
+
+def accumulate_xy_val_from_cleaned_db(
+    config_path="config.yaml",
+    *,
+    preprocessor,
+    date_ge=None,
+    date_le=None,
+):
+    """Concatenate validation batches (preprocessor loaded from a saved train bundle)."""
+    parts_x, parts_y = [], []
+    for X, y in stream_full_val_pipeline(
+        config_path,
+        preprocessor=preprocessor,
+        date_ge=date_ge,
+        date_le=date_le,
+    ):
+        parts_x.append(X)
+        parts_y.append(y)
+    if not parts_x:
+        raise ValueError(
+            "No cleaned rows in DB for validation (check date filter and pipeline)."
+        )
+    return concat_xy_batches(parts_x, parts_y, preprocessor.model_kind)
+
+
+if __name__ == "__main__":
+    import sys
+
+    path = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
+    mname = sys.argv[2] if len(sys.argv) > 2 else "catboost"
+    for _step in stream_full_train_pipeline(path, mname):
+        import pdb
+
+        pdb.set_trace()

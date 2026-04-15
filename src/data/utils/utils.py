@@ -55,19 +55,13 @@ def load_raw_csv(csv_path):
 
 
 def load_raw(path_csv=None):
-    from src.data.database.db_stream import db_stream
-
-    if path_csv:
-        X_raw, y_raw = load_raw_csv(str(path_csv))
-        return X_raw, np.array([float(v) for v in y_raw], dtype=np.float32)
-
-    all_x, all_y = [], []
-    for x_batch, y_batch in db_stream():
-        for x, y in zip(x_batch, y_batch):
-            if y is not None:
-                all_x.append(x)
-                all_y.append(y)
-    return all_x, np.array([float(v) for v in all_y], dtype=np.float32)
+    """Load labeled rows from a CSV. For SQLite training/validation use cleaned-batch helpers instead."""
+    if not path_csv:
+        raise ValueError(
+            "load_raw requires --path-csv; for DB data use accumulate_xy_from_cleaned_db / streaming."
+        )
+    X_raw, y_raw = load_raw_csv(str(path_csv))
+    return X_raw, np.array([float(v) for v in y_raw], dtype=np.float32)
 
 def get_all_features(cfg):
     features = []

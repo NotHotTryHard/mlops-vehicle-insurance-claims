@@ -3,7 +3,7 @@ from pathlib import Path
 import yaml
 from tqdm import tqdm
 
-from src.data.database import db_stream
+from src.data.database.db_stream import db_stream
 from src.data.utils import get_all_features, load_config
 from src.preprocessing.feature_engineering import engineered_numeric_column_names
 
@@ -208,12 +208,17 @@ def write_feature_matrix_columns_to_quality_yaml(config_path: str, cleaner: Data
         )
 
 
-def stream_cleaned_batches(config_path: str = "config.yaml"):
+def stream_cleaned_batches(
+    config_path: str = "config.yaml",
+    *,
+    date_ge=None,
+    date_le=None,
+):
     cfg_path = Path(config_path).resolve()
     cfg = load_config(cfg_path)
     cleaner = DataCleaner.from_config(str(cfg_path))
     batch_size = int(cfg["batch"]["size"])
-    stream = db_stream(batch_size=batch_size)
+    stream = db_stream(batch_size=batch_size, date_ge=date_ge, date_le=date_le)
     for batch in stream:
         cleaned = cleaner.clean_batch(batch)
         if cleaned:

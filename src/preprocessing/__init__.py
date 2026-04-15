@@ -9,7 +9,10 @@ from .feature_engineering import (
 from .numeric_only import NumericOnlyPreprocessor
 from .stream_train_data import (
     TrainMatrixPreprocessor,
+    accumulate_xy_from_cleaned_db,
+    accumulate_xy_val_from_cleaned_db,
     cat_features_from_frame,
+    concat_xy_batches,
     features_xy_for_model,
     fill_target_y,
     load_feature_matrix_columns,
@@ -32,6 +35,9 @@ __all__ = [
     "make_train_matrix_preprocessor",
     "stream_full_train_pipeline",
     "stream_full_val_pipeline",
+    "accumulate_xy_from_cleaned_db",
+    "accumulate_xy_val_from_cleaned_db",
+    "concat_xy_batches",
     "load_feature_matrix_columns",
     "target_vector_from_rows",
     "target_fill",

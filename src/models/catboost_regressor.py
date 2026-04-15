@@ -16,8 +16,11 @@ class CatBoostRegressionModel(BaseRegressor):
         params.update(kwargs)
         self.model = CatBoostRegressor(**params)
 
-    def fit(self, X, y):
-        self.model.fit(X, y)
+    def fit(self, X, y, cat_features=None, **kwargs):
+        if cat_features:
+            self.model.fit(X, y, cat_features=cat_features)
+        else:
+            self.model.fit(X, y)
         return self
 
     def predict(self, X):

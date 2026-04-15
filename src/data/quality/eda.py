@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.data.database import db_stream
+from src.data.database.db_stream import db_stream
 from src.data.utils import get_all_features, load_config
 
 

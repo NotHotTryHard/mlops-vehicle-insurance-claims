@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.preprocessing import StandardScaler
 
 from .base import BaseRegressor
 
@@ -48,23 +47,22 @@ class MLPRegressionModel(BaseRegressor):
         self.patience = patience
         self.val_fraction = val_fraction
         self.random_state = random_state
-        self._scaler = StandardScaler()
         self._net = None
 
-    def fit(self, X, y):
+    def fit(self, X, y, **kwargs):
+        kwargs.pop("cat_features", None)
         torch.manual_seed(self.random_state)
         np.random.seed(self.random_state)
 
-        X_scaled = self._scaler.fit_transform(X)
-
-        n = len(X_scaled)
+        X = np.asarray(X, dtype=np.float32)
+        n = len(X)
         n_val = max(1, int(n * self.val_fraction))
         perm = np.random.permutation(n)
         val_idx, train_idx = perm[:n_val], perm[n_val:]
 
-        X_tr = torch.tensor(X_scaled[train_idx], dtype=torch.float32)
+        X_tr = torch.tensor(X[train_idx], dtype=torch.float32)
         y_tr = torch.tensor(y[train_idx], dtype=torch.float32)
-        X_val = torch.tensor(X_scaled[val_idx], dtype=torch.float32)
+        X_val = torch.tensor(X[val_idx], dtype=torch.float32)
         y_val = torch.tensor(y[val_idx], dtype=torch.float32)
 
         self._net = _MLP(X_tr.shape[1], self.hidden_layer_sizes)
@@ -105,7 +103,7 @@ class MLPRegressionModel(BaseRegressor):
         return self
 
     def predict(self, X):
-        X_scaled = self._scaler.transform(X)
+        X = np.asarray(X, dtype=np.float32)
         self._net.eval()
         with torch.no_grad():
-            return self._net(torch.tensor(X_scaled, dtype=torch.float32)).numpy()
+            return self._net(torch.tensor(X, dtype=torch.float32)).numpy()

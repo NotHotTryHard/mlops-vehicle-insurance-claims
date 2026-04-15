@@ -4,7 +4,7 @@ from pathlib import Path
 import yaml
 from tqdm import tqdm
 
-from src.data.database import db_stream
+from src.data.database.db_stream import db_stream
 from src.data.utils import load_config
 
 from .association import AssociationRulesAnalyzer

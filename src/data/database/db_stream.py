@@ -9,14 +9,13 @@ from src.data.utils import load_config, parse_date
 def db_stream(
     batch_size=None,
     date_ge=None,
+    date_le=None,
     date_ge_shift_days=0,
 ):
     cfg_path = Path("config.yaml")
     cfg = load_config(cfg_path)
     root = cfg_path.parent
 
-    features = cfg["columns"]["features"]
-    target = cfg["columns"]["target"]
     db_path = root / cfg["data_storage"]["data_path"]
     fetch_size = batch_size or int(cfg["batch"]["size"])
     dt_fmt = cfg["columns"].get("datetime_format", "%Y-%m-%d")
@@ -26,11 +25,22 @@ def db_stream(
         base_date = parse_date(date_ge, dt_fmt, strict=True)
         effective_date_ge = (date.fromisoformat(base_date) + timedelta(days=date_ge_shift_days)).isoformat()
 
+    effective_date_le = None
+    if date_le:
+        base_le = parse_date(date_le, dt_fmt, strict=True)
+        effective_date_le = date.fromisoformat(base_le).isoformat()
+
     query = "SELECT raw_json FROM raw_events"
+    clauses = []
     params = []
     if effective_date_ge:
-        query += " WHERE event_date IS NOT NULL AND event_date >= ?"
+        clauses.append("event_date IS NOT NULL AND event_date >= ?")
         params.append(effective_date_ge)
+    if effective_date_le:
+        clauses.append("event_date IS NOT NULL AND event_date <= ?")
+        params.append(effective_date_le)
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
     query += " ORDER BY event_date, id"
 
     conn = sqlite3.connect(db_path)
