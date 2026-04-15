@@ -7,7 +7,12 @@ from .association import (
     max_rule_features_from_cfg,
 )
 from .binarization import Binner, NumericBinner
-from .clean import DataCleaner, run_cleaning_summary, stream_cleaned_batches
+from .clean import (
+    DataCleaner,
+    run_cleaning_summary,
+    stream_cleaned_batches,
+    write_feature_matrix_columns_to_quality_yaml,
+)
 from .eda import load_eda_rows_from_db, run_automatic_eda
 from .quality_report import (
     QualityChecker,
@@ -31,6 +36,7 @@ __all__ = [
     "DataCleaner",
     "run_cleaning_summary",
     "stream_cleaned_batches",
+    "write_feature_matrix_columns_to_quality_yaml",
     "load_eda_rows_from_db",
     "run_automatic_eda",
     "stream_analysis_and_cleaning_pipeline",

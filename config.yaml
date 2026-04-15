@@ -55,5 +55,37 @@ eda:
   minimal_profile: true
   title: "Vehicle insurance claims — EDA"
 
+preprocessing:
+  target_missing_fill: 0
+  feature_engineering:
+    enabled: true
+    log1p:
+      - "PREMIUM"
+      - "INSURED_VALUE"
+    ratios:
+      - name: "premium_per_seat"
+        numerator: "PREMIUM"
+        denominator: "SEATS_NUM"
+        eps: 1.0e-6
+      - name: "insured_per_ccm"
+        numerator: "INSURED_VALUE"
+        denominator: "CCM_TON"
+        eps: 1.0e-6
+    differences:
+      - name: "effective_minus_prod_year"
+        a: "EFFECTIVE_YR"
+        b: "PROD_YEAR"
+  default_variant: catboost_ord
+  variants:
+    catboost_ord:
+      numeric: { impute: median, scale: false }
+      categorical: { impute: most_frequent, encode: ordinal }
+    mlp_ohe:
+      numeric: { impute: median, scale: true }
+      categorical: { impute: most_frequent, encode: onehot }
+    mlp_ord:
+      numeric: { impute: median, scale: true }
+      categorical: { impute: most_frequent, encode: ordinal }
+
 model_storage:
   models_path: "session/models"

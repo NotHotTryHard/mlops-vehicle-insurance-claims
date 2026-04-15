@@ -5,6 +5,7 @@ from tqdm import tqdm
 
 from src.data.database import db_stream
 from src.data.utils import get_all_features, load_config
+from src.preprocessing.feature_engineering import engineered_numeric_column_names
 
 from .association import (
     augment_row_from_specs,
@@ -176,6 +177,36 @@ class DataCleaner:
             s["association_rule_features"] = [x["feature_name"] for x in self.rule_feature_specs]
         return s
 
+    def feature_matrix_column_lists(self):
+        """Column names for TrainMatrixPreprocessor: kept numerics + rule bins + FE numerics, then cats."""
+        num = list(self.kept_numeric)
+        for spec in self.rule_feature_specs:
+            num.append(spec["feature_name"])
+        num.extend(engineered_numeric_column_names(self.cfg))
+        cat = list(self.kept_categorical)
+        return num, cat
+
+
+def write_feature_matrix_columns_to_quality_yaml(config_path: str, cleaner: DataCleaner) -> None:
+    cfg_path = Path(config_path).resolve()
+    cfg = load_config(cfg_path)
+    qp = cfg_path.parent / cfg["data_storage"]["quality_path"]
+    num, cat = cleaner.feature_matrix_column_lists()
+    data = {}
+    if qp.exists():
+        with qp.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    data["feature_matrix_columns"] = {"numeric": num, "categorical": cat}
+    qp.parent.mkdir(parents=True, exist_ok=True)
+    with qp.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(
+            data,
+            f,
+            allow_unicode=True,
+            default_flow_style=False,
+            sort_keys=False,
+        )
+
 
 def stream_cleaned_batches(config_path: str = "config.yaml"):
     cfg_path = Path(config_path).resolve()
@@ -190,6 +221,8 @@ def stream_cleaned_batches(config_path: str = "config.yaml"):
 
 
 def run_cleaning_summary(config_path: str = "config.yaml"):
+    cfg_path = Path(config_path).resolve()
+    cfg = load_config(cfg_path)
     c = DataCleaner.from_config(config_path)
     s = c.summary()
     print("Basic cleaning policy:")
@@ -197,6 +230,8 @@ def run_cleaning_summary(config_path: str = "config.yaml"):
     print(f"  Kept features: {s['kept_features']}")
     if s.get("association_rule_features"):
         print(f"  Association rule binary features: {s['association_rule_features']}")
+    write_feature_matrix_columns_to_quality_yaml(config_path, c)
+    print(f"  Wrote feature_matrix_columns to {cfg['data_storage']['quality_path']}")
     return s
 
 
