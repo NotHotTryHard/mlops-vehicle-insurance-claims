@@ -1,0 +1,9 @@
+.git
+.venv
+.venv-req
+**/__pycache__
+**/*.pyc
+datasets
+session
+catboost_info
+.env
