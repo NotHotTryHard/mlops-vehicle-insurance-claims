@@ -177,15 +177,12 @@ class DataCleaner:
         return s
 
 
-def stream_cleaned_batches(config_path: str = "config.yaml", *, show_progress: bool = True):
-    """Yield batches from the DB after row filtering and column projection."""
+def stream_cleaned_batches(config_path: str = "config.yaml"):
     cfg_path = Path(config_path).resolve()
     cfg = load_config(cfg_path)
     cleaner = DataCleaner.from_config(str(cfg_path))
     batch_size = int(cfg["batch"]["size"])
-    stream = db_stream(batch_size=batch_size, config_path=str(cfg_path))
-    if show_progress:
-        stream = tqdm(stream, desc="Clean batches")
+    stream = db_stream(batch_size=batch_size)
     for batch in stream:
         cleaned = cleaner.clean_batch(batch)
         if cleaned:
@@ -204,8 +201,4 @@ def run_cleaning_summary(config_path: str = "config.yaml"):
 
 
 if __name__ == "__main__":
-    # Usage: python -m src.data.quality.clean [config.yaml]
-    import sys
-
-    cfg = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
     run_cleaning_summary(cfg)

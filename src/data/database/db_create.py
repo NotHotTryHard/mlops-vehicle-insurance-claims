@@ -7,6 +7,7 @@ from pathlib import Path
 import tqdm
 
 from src.data.utils import load_config, parse_date
+from src.data.quality.eda import eda_column_names, run_automatic_eda
 from src.data.quality.stats import DataStatsGlobalAnalyzer
 
 
@@ -59,12 +60,22 @@ def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
     conn = db_init(db_path)
     cur = conn.cursor()
 
+    eda_cfg = cfg.get("eda") or {}
+    eda_max = int(eda_cfg.get("max_rows", 30_000))
+    eda_cols = eda_column_names(cfg)
+    eda_rows: list[dict] = []
+
     analyzer = DataStatsGlobalAnalyzer(cfg, missing_values=(None, ""), round_precision=3, dt_col=dt_col, dt_fmt=dt_fmt)
     for source in data_sources:
         print(f"Streaming from {source}...")
         for batch_idx, batch in tqdm.tqdm(enumerate(stream_batches(source, batch_size), start=1)):
             loaded_at = datetime.now().isoformat(timespec="seconds")
             analyzer.update(batch)
+            if len(eda_rows) < eda_max:
+                for _row_num, row in batch:
+                    if len(eda_rows) >= eda_max:
+                        break
+                    eda_rows.append({c: row.get(c) for c in eda_cols})
             rows_to_insert = [
                 (
                     str(source),
@@ -91,6 +102,7 @@ def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
     print(f"Done. SQLite DB: {db_path}")
     print(analyzer.meta_analyzer)
     analyzer.save_report()
+    run_automatic_eda(str(cfg_path.resolve()), eda_rows)
 
 
 def ensure_db():

@@ -1,58 +1,42 @@
-import importlib
-
-from .association import AssociationRulesAnalyzer
+from .association import (
+    AssociationRulesAnalyzer,
+    augment_batch_from_specs,
+    augment_row_from_specs,
+    binner_and_columns_from_stats,
+    load_rule_feature_specs,
+    max_rule_features_from_cfg,
+)
 from .binarization import Binner, NumericBinner
+from .clean import DataCleaner, run_cleaning_summary, stream_cleaned_batches
+from .eda import load_eda_rows_from_db, run_automatic_eda
+from .quality_report import (
+    QualityChecker,
+    load_statistics_bundle,
+    run_association_rules,
+    run_full_quality_pipeline,
+)
+from .pipeline import stream_analysis_and_cleaning_pipeline
 from .stats import DataStatsGlobalAnalyzer
 
+
 __all__ = [
-    "DataStatsGlobalAnalyzer",
     "AssociationRulesAnalyzer",
+    "augment_batch_from_specs",
+    "augment_row_from_specs",
+    "binner_and_columns_from_stats",
+    "load_rule_feature_specs",
+    "max_rule_features_from_cfg",
     "Binner",
     "NumericBinner",
-    "QualityChecker",
     "DataCleaner",
-    "find_association_rules",
+    "run_cleaning_summary",
+    "stream_cleaned_batches",
+    "load_eda_rows_from_db",
+    "run_automatic_eda",
+    "stream_analysis_and_cleaning_pipeline",
+    "QualityChecker",
     "load_statistics_bundle",
     "run_association_rules",
     "run_full_quality_pipeline",
-    "run_cleaning_summary",
-    "stream_cleaned_batches",
-    "augment_row_from_specs",
-    "load_rule_feature_specs",
-    "max_rule_features_from_cfg",
+    "DataStatsGlobalAnalyzer",
 ]
-
-_LAZY_FROM_QUALITY_REPORT = frozenset(
-    {
-        "QualityChecker",
-        "find_association_rules",
-        "load_statistics_bundle",
-        "run_association_rules",
-        "run_full_quality_pipeline",
-    }
-)
-
-_LAZY_FROM_CLEAN = frozenset(
-    {
-        "DataCleaner",
-        "run_cleaning_summary",
-        "stream_cleaned_batches",
-        "augment_row_from_specs",
-        "load_rule_feature_specs",
-        "max_rule_features_from_cfg",
-    }
-)
-
-
-def __getattr__(name: str):
-    if name in _LAZY_FROM_QUALITY_REPORT:
-        mod = importlib.import_module(".quality_report", __name__)
-        return getattr(mod, name)
-    if name in _LAZY_FROM_CLEAN:
-        mod = importlib.import_module(".clean", __name__)
-        return getattr(mod, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-def __dir__():
-    return sorted(__all__)

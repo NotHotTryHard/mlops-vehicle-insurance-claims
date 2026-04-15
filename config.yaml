@@ -31,9 +31,9 @@ batch:
 
 data_storage:
   data_path: "session/data/db_sqlite.db"
-  statistics_path: "session/data/db_statistics.yaml"
-  meta_path: "session/data/db_meta.yaml"
-  quality_path: "session/data/db_quality.yaml"
+  statistics_path: "session/reports/db_statistics.yaml"
+  meta_path: "session/reports/db_meta.yaml"
+  quality_path: "session/reports/db_quality.yaml"
 
 quality:
   thresholds:
@@ -47,8 +47,13 @@ quality:
     rule_confidence_threshold: 0.8
     rule_lift_threshold: 1.2
     add_rule_features: true
-    # Binary ar_rule_* count (best rules first); omit to use top_k
     max_rule_features: 5
+
+eda:
+  report_path: "session/reports/eda_profile.html"
+  max_rows: 30000
+  minimal_profile: true
+  title: "Vehicle insurance claims — EDA"
 
 model_storage:
   models_path: "session/models"
