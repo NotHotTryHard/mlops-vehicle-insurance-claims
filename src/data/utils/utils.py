@@ -48,7 +48,8 @@ def load_raw_csv(csv_path):
         for row in reader:
             if any(row.get(col, "") == "" for col in required_cols):
                 continue
-            X.append({col: row[col] for col in feature_cols or col in target_col})
+            X.append({col: row[col] for col in feature_cols})
+            y.append(float(row[target_col]))
 
     return X, y
 
