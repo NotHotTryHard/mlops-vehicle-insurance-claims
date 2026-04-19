@@ -105,10 +105,12 @@ class DataStatsAnalyzer:
 
         for column in self.num_features:
             stats = self.num_stats[column]
+            total = stats["count"] + stats["missing"] + stats["nonvalid"]
             if stats["count"]:
-                stats["mean"] = round(stats["max"] / stats["count"], self.precision)
-                stats["missing_frequency"] = round(stats["missing"] / stats["count"], self.precision)
-                stats["nonvalid_frequency"] = round(stats["nonvalid"] / stats["count"], self.precision)
+                stats["mean"] = round(stats["sum"] / stats["count"], self.precision)
+            if total:
+                stats["missing_frequency"] = round(stats["missing"] / total, self.precision)
+                stats["nonvalid_frequency"] = round(stats["nonvalid"] / total, self.precision)
             else:
                 stats["missing_frequency"] = 1.0
         for column in self.cat_features:
@@ -120,6 +122,11 @@ class DataStatsAnalyzer:
                 reverse=True,
             ))
             stats["frequency"] = sorted_freq
+            total = stats["count"] + stats["missing"]
+            if total:
+                stats["missing_frequency"] = round(stats["missing"] / total, self.precision)
+            else:
+                stats["missing_frequency"] = 1.0
         self.result_stats = {
             "numeric_features": self.num_stats,
             "categorical_features": self.cat_stats,
