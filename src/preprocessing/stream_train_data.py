@@ -220,13 +220,12 @@ class TrainMatrixPreprocessor(BasePreprocessor):
         return np.asarray(out, dtype=np.float32)
 
     def transform_frame(self, X):
-        """DataFrame of features; category dtype on ordinal cols when model is catboost."""
         arr = self.transform(X)
         names = list(self._column_transformer.get_feature_names_out())
         df = pd.DataFrame(arr, columns=names)
-        if self.model_kind == "catboost" and self.catboost_cat_indices:
-            for i in self.catboost_cat_indices:
-                c = names[i]
+        if self.model_kind == "catboost":
+            cat_cols = [c for c in names if c.startswith("cat__")]
+            for c in cat_cols:
                 df[c] = pd.Series(df[c]).round().astype(np.int32).astype("category")
         return df
 
