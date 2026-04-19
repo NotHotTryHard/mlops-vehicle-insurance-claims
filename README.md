@@ -94,6 +94,9 @@ python run.py --mode add_data --path-csv datasets/motor_data14-2018.csv
 # Обучить новую CatBoost модель
 python run.py --mode train --path-csv datasets/motor_data14-2018.csv --new catboost
 
+# Дообучить уже сохранённую модель на новых данных (без обучения с нуля)
+python run.py --mode train --date-until 2012-12-31 --old catboost_catboost_ord_20260419_233941
+
 # Оценить сохранённую модель
 python run.py --mode val --path-csv datasets/motor_data14-2018.csv --old catboost_20260321_171846
 

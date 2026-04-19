@@ -32,12 +32,14 @@ class MLPRegressionModel(BaseRegressor):
     def __init__(
         self,
         hidden_layer_sizes=(64, 32),
-        lr=1e-3,
-        max_epochs=300,
+        lr=5e-4,
+        max_epochs=400,
         batch_size=256,
         patience=15,
         val_fraction=0.1,
         random_state=42,
+        loss="huber",
+        huber_delta=1.0,
     ):
         super().__init__()
         self.hidden_layer_sizes = hidden_layer_sizes
@@ -47,10 +49,13 @@ class MLPRegressionModel(BaseRegressor):
         self.patience = patience
         self.val_fraction = val_fraction
         self.random_state = random_state
+        self.loss = str(loss).lower()
+        self.huber_delta = float(huber_delta)
         self._net = None
 
     def fit(self, X, y, **kwargs):
         kwargs.pop("cat_features", None)
+        continue_training = bool(kwargs.pop("continue_training", False))
         torch.manual_seed(self.random_state)
         np.random.seed(self.random_state)
 
@@ -65,9 +70,18 @@ class MLPRegressionModel(BaseRegressor):
         X_val = torch.tensor(X[val_idx], dtype=torch.float32)
         y_val = torch.tensor(y[val_idx], dtype=torch.float32)
 
-        self._net = _MLP(X_tr.shape[1], self.hidden_layer_sizes)
+        need_new_net = (
+            (self._net is None)
+            or (not continue_training)
+            or (self._net.net[0].in_features != X_tr.shape[1])
+        )
+        if need_new_net:
+            self._net = _MLP(X_tr.shape[1], self.hidden_layer_sizes)
         optimizer = torch.optim.Adam(self._net.parameters(), lr=self.lr)
-        loss_fn = nn.MSELoss()
+        if self.loss == "huber":
+            loss_fn = nn.HuberLoss(delta=self.huber_delta)
+        else:
+            loss_fn = nn.MSELoss()
 
         best_val_loss = float("inf")
         best_state = None

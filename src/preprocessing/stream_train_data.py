@@ -345,7 +345,16 @@ def build_train_dataset(
 def make_train_matrix_preprocessor(cfg, model_name, config_path="config.yaml"):
     prep = merge_preprocessing_from_config(cfg)
     vname = prep["default_variant"]
-    spec = prep["variants"][vname]
+    variants = prep["variants"]
+    if model_name == "mlp" and str(vname).startswith("catboost"):
+        if "mlp_ohe" in variants:
+            vname = "mlp_ohe"
+        elif "mlp_ord" in variants:
+            vname = "mlp_ord"
+    if model_name == "catboost" and str(vname).startswith("mlp"):
+        if "catboost_ord" in variants:
+            vname = "catboost_ord"
+    spec = variants[vname]
     num_cols, cat_cols = load_feature_matrix_columns(config_path)
     return TrainMatrixPreprocessor(
         cfg,

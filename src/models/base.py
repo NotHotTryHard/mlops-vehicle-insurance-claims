@@ -31,6 +31,14 @@ class BaseRegressor(ABC):
         self.trained_at = datetime.now().isoformat(timespec="seconds")
         return self.metrics
 
+    def update(self, X, y, **fit_kwargs):
+        y_log = self._transform_target(y)
+        self.fit(X, y_log, continue_training=True, **fit_kwargs)
+        self._resid_var = float(np.var(y_log - self.predict(X)))
+        self.metrics = self.evaluate(X, y)
+        self.trained_at = datetime.now().isoformat(timespec="seconds")
+        return self.metrics
+
     def evaluate(self, X, y):
         preds = self._inverse_transform_target(self.predict(X))
         rmse = float(np.sqrt(np.mean((preds - y) ** 2)))

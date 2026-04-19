@@ -18,10 +18,18 @@ class CatBoostRegressionModel(BaseRegressor):
         self.model = CatBoostRegressor(**params)
 
     def fit(self, X, y, cat_features=None, **kwargs):
+        continue_training = bool(kwargs.pop("continue_training", False))
+        fit_kwargs = dict(kwargs)
+        if continue_training:
+            try:
+                if self.model.is_fitted():
+                    fit_kwargs["init_model"] = self.model
+            except Exception:
+                pass
         if cat_features:
-            self.model.fit(X, y, cat_features=cat_features)
+            self.model.fit(X, y, cat_features=cat_features, **fit_kwargs)
         else:
-            self.model.fit(X, y)
+            self.model.fit(X, y, **fit_kwargs)
         return self
 
     def predict(self, X):
