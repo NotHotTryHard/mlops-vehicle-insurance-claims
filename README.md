@@ -78,8 +78,12 @@ session/model_stash/
 ## Базовый синтаксис
 
 ```bash
-python run.py --mode <train|val|add_data> [опции]
+python run.py --mode <train|val|add_data|analyse> [опции]
 ```
+
+## Логи
+
+`run.py` пишет служебные сообщения и ошибки в `session/logs/run.log`.
 
 ## Примеры использования
 

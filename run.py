@@ -1,4 +1,5 @@
 import pickle
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -21,6 +22,21 @@ _MODEL_TO_CLASS = {
 }
 
 CONFIG_PATH = "config.yaml"
+LOG_PATH = Path("session/logs/run.log")
+LOGGER = logging.getLogger("mlops_run")
+
+
+def setup_logging() -> None:
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if LOGGER.handlers:
+        return
+    LOGGER.setLevel(logging.INFO)
+    handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+    )
+    LOGGER.addHandler(handler)
+    LOGGER.propagate = False
 
 
 def train_call(
@@ -30,6 +46,12 @@ def train_call(
     models_path: Path,
     cfg: dict,
 ) -> None:
+    LOGGER.info(
+        "train_call started path_csv=%s date_until=%s new_model=%s",
+        path_csv,
+        date_until,
+        new_model,
+    )
     preprocessor, X, y = build_train_dataset(
         cfg,
         new_model,
@@ -59,6 +81,12 @@ def train_call(
             f,
         )
 
+    LOGGER.info(
+        "train_call saved model=%s metrics=%s path=%s",
+        name,
+        metrics,
+        models_path / f"{name}.pkl",
+    )
     print(f"Saved: {name}")
     print(metrics)
 
@@ -70,6 +98,12 @@ def val_call(
     models_path: Path,
     cfg: dict,
 ) -> None:
+    LOGGER.info(
+        "val_call started path_csv=%s date_until=%s old_model=%s",
+        path_csv,
+        date_until,
+        old_model,
+    )
     with open(models_path / f"{old_model}.pkl", "rb") as f:
         bundle = pickle.load(f)
 
@@ -81,6 +115,7 @@ def val_call(
         date_until=date_until,
     )
     metrics = bundle["model"].evaluate(X, y)
+    LOGGER.info("val_call metrics=%s old_model=%s", metrics, old_model)
     print(metrics)
 
 
@@ -125,55 +160,74 @@ def val_call(
     help="Clear database and model files",
 )
 def cli(mode, path_csv, date_until, old_model, new_model, clear):
-    if not clear:
-        ensure_db()
+    setup_logging()
+    LOGGER.info(
+        "cli started mode=%s path_csv=%s date_until=%s old=%s new=%s clear=%s",
+        mode,
+        path_csv,
+        date_until,
+        old_model,
+        new_model,
+        clear,
+    )
+    try:
+        if not clear:
+            ensure_db()
 
-    if clear:
-        db_clear()
-        return
+        if clear:
+            db_clear()
+            LOGGER.info("cli completed clear=true")
+            return
 
-    if mode is None:
-        raise click.UsageError("Missing option '--mode'.")
+        if mode is None:
+            raise click.UsageError("Missing option '--mode'.")
 
-    if mode == "add_data":
-        if path_csv is None:
-            raise click.UsageError("add_data requires --path-csv.")
-        if date_until is not None:
-            raise click.UsageError("add_data does not accept --date-until.")
-        if old_model is not None or new_model is not None:
-            raise click.UsageError("add_data does not accept --old or --new.")
-        db_add_tables(config_path=CONFIG_PATH, paths=[path_csv.resolve()])
-        return
+        if mode == "add_data":
+            if path_csv is None:
+                raise click.UsageError("add_data requires --path-csv.")
+            if date_until is not None:
+                raise click.UsageError("add_data does not accept --date-until.")
+            if old_model is not None or new_model is not None:
+                raise click.UsageError("add_data does not accept --old or --new.")
+            db_add_tables(config_path=CONFIG_PATH, paths=[path_csv.resolve()])
+            LOGGER.info("cli completed mode=add_data path_csv=%s", path_csv.resolve())
+            return
 
-    if mode == "analyse":
-        if path_csv is not None or date_until is not None:
-            raise click.UsageError("analyse mode does not use --path-csv or --date-until.")
-        if old_model is not None or new_model is not None:
-            raise click.UsageError("analyse mode does not use --old or --new.")
-        run_automatic_eda(CONFIG_PATH, load_eda_rows_from_db(CONFIG_PATH))
-        return
+        if mode == "analyse":
+            if path_csv is not None or date_until is not None:
+                raise click.UsageError("analyse mode does not use --path-csv or --date-until.")
+            if old_model is not None or new_model is not None:
+                raise click.UsageError("analyse mode does not use --old or --new.")
+            run_automatic_eda(CONFIG_PATH, load_eda_rows_from_db(CONFIG_PATH))
+            LOGGER.info("cli completed mode=analyse")
+            return
 
-    has_csv = path_csv is not None
-    has_dates = date_until is not None
-    if has_csv == has_dates:
-        raise click.UsageError("Choose either --path-csv or --date-until.")
+        has_csv = path_csv is not None
+        has_dates = date_until is not None
+        if has_csv == has_dates:
+            raise click.UsageError("Choose either --path-csv or --date-until.")
 
-    if mode == "train":
-        if old_model is not None:
-            raise click.UsageError("train does not use --old.")
-        if new_model is None:
-            raise click.UsageError("train requires --new.")
-    elif mode == "val":
-        if old_model is None or new_model is not None:
-            raise click.UsageError("val requires --old and no --new.")
+        if mode == "train":
+            if old_model is not None:
+                raise click.UsageError("train does not use --old.")
+            if new_model is None:
+                raise click.UsageError("train requires --new.")
+        elif mode == "val":
+            if old_model is None or new_model is not None:
+                raise click.UsageError("val requires --old and no --new.")
 
-    cfg = load_config(CONFIG_PATH)
-    models_path = Path(cfg["model_storage"]["models_path"])
+        cfg = load_config(CONFIG_PATH)
+        models_path = Path(cfg["model_storage"]["models_path"])
 
-    if mode == "train":
-        train_call(path_csv, date_until, new_model, models_path, cfg)
-    elif mode == "val":
-        val_call(path_csv, date_until, old_model, models_path, cfg)
+        if mode == "train":
+            train_call(path_csv, date_until, new_model, models_path, cfg)
+        elif mode == "val":
+            val_call(path_csv, date_until, old_model, models_path, cfg)
+
+        LOGGER.info("cli completed mode=%s", mode)
+    except Exception:
+        LOGGER.exception("cli failed mode=%s", mode)
+        raise
 
 
 if __name__ == "__main__":
