@@ -231,7 +231,10 @@ class TrainMatrixPreprocessor(BasePreprocessor):
 
 
 def cat_features_from_frame(df):
-    return [c for c in df.columns if isinstance(df[c].dtype, pd.CategoricalDtype)]
+    cat_cols = [c for c in df.columns if isinstance(df[c].dtype, pd.CategoricalDtype)]
+    if cat_cols:
+        return cat_cols
+    return [c for c in df.columns if str(c).startswith("cat__")]
 
 
 def concat_xy_batches(parts_x, parts_y, model_kind):
@@ -240,7 +243,11 @@ def concat_xy_batches(parts_x, parts_y, model_kind):
         raise ValueError("No batches to concatenate.")
     y = np.concatenate(parts_y)
     if model_kind == "catboost":
-        return pd.concat(parts_x, ignore_index=True), y
+        df = pd.concat(parts_x, ignore_index=True)
+        for c in [col for col in df.columns if str(col).startswith("cat__")]:
+            if not isinstance(df[c].dtype, pd.CategoricalDtype):
+                df[c] = pd.Series(df[c]).round().astype(np.int32).astype("category")
+        return df, y
     stacked = np.vstack([np.asarray(x, dtype=np.float32) for x in parts_x])
     return stacked, y
 
