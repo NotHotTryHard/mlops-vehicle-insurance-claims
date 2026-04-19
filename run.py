@@ -6,17 +6,13 @@ from typing import Optional
 import click
 
 from src.data.database import db_add_tables, db_clear, ensure_db
-from src.data.utils import load_config, load_raw
-from src.models import CatBoostRegressionModel, MLPRegressionModel
+from src.data.utils import load_config
 from src.data.quality.eda import load_eda_rows_from_db, run_automatic_eda
-from src.data.quality.pipeline import stream_analysis_and_cleaning_pipeline
-from src.preprocessing.feature_engineering import apply_feature_engineering_rows
+from src.models import CatBoostRegressionModel, MLPRegressionModel
 from src.preprocessing.stream_train_data import (
-    accumulate_xy_from_cleaned_db,
-    accumulate_xy_val_from_cleaned_db,
+    build_train_dataset,
+    build_val_dataset,
     cat_features_from_frame,
-    features_xy_for_model,
-    make_train_matrix_preprocessor,
 )
 
 _MODEL_TO_CLASS = {
@@ -34,24 +30,13 @@ def train_call(
     models_path: Path,
     cfg: dict,
 ) -> None:
-    """
-    CSV: in-memory fit (raw rows + FE). DB (``--date-until``): cleaned batches from SQLite,
-    same path as ``accumulate_xy_from_cleaned_db`` / streaming pipeline.
-    """
-    if path_csv is not None:
-        X_raw, y = load_raw(path_csv)
-        X_raw = apply_feature_engineering_rows(cfg, X_raw)
-        preprocessor = make_train_matrix_preprocessor(
-            cfg, new_model, config_path=CONFIG_PATH
-        )
-        preprocessor.fit(X_raw)
-        X, y = features_xy_for_model(preprocessor, X_raw, y, cfg)
-    else:
-        preprocessor, X, y = accumulate_xy_from_cleaned_db(
-            CONFIG_PATH,
-            new_model,
-            date_le=date_until,
-        )
+    preprocessor, X, y = build_train_dataset(
+        cfg,
+        new_model,
+        config_path=CONFIG_PATH,
+        path_csv=path_csv,
+        date_until=date_until,
+    )
     model = _MODEL_TO_CLASS[new_model]()
     if new_model == "catboost":
         metrics = model.train(X, y, cat_features=cat_features_from_frame(X))
@@ -88,17 +73,13 @@ def val_call(
     with open(models_path / f"{old_model}.pkl", "rb") as f:
         bundle = pickle.load(f)
 
-    prep = bundle["preprocessor"]
-    if path_csv is not None:
-        X_raw, y = load_raw(path_csv)
-        X_raw = apply_feature_engineering_rows(cfg, X_raw)
-        X, y = features_xy_for_model(prep, X_raw, y, cfg)
-    else:
-        X, y = accumulate_xy_val_from_cleaned_db(
-            CONFIG_PATH,
-            preprocessor=prep,
-            date_le=date_until,
-        )
+    X, y = build_val_dataset(
+        cfg,
+        preprocessor=bundle["preprocessor"],
+        config_path=CONFIG_PATH,
+        path_csv=path_csv,
+        date_until=date_until,
+    )
     metrics = bundle["model"].evaluate(X, y)
     print(metrics)
 
@@ -106,9 +87,9 @@ def val_call(
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
     "--mode",
-    type=click.Choice(["train", "val", "add_data", "eda", "pipeline"]),
+    type=click.Choice(["train", "val", "add_data", "analyse"]),
     default=None,
-    help="train | val | add_data | eda | pipeline (quality + cleaning, then stream cleaned batches)",
+    help="train | val | add_data | analyse",
 )
 @click.option(
     "--path-csv",
@@ -149,7 +130,6 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear):
 
     if clear:
         db_clear()
-        # model_stash_clear()
         return
 
     if mode is None:
@@ -162,26 +142,15 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear):
             raise click.UsageError("add_data does not accept --date-until.")
         if old_model is not None or new_model is not None:
             raise click.UsageError("add_data does not accept --old or --new.")
-        db_add_tables(config_path="config.yaml", paths=[path_csv.resolve()])
+        db_add_tables(config_path=CONFIG_PATH, paths=[path_csv.resolve()])
         return
 
-    if mode == "eda":
+    if mode == "analyse":
         if path_csv is not None or date_until is not None:
-            raise click.UsageError("eda mode does not use --path-csv or --date-until.")
+            raise click.UsageError("analyse mode does not use --path-csv or --date-until.")
         if old_model is not None or new_model is not None:
-            raise click.UsageError("eda mode does not use --old or --new.")
-        run_automatic_eda("config.yaml", load_eda_rows_from_db("config.yaml"))
-        return
-
-    if mode == "pipeline":
-        if path_csv is not None or date_until is not None:
-            raise click.UsageError("pipeline mode does not use --path-csv or --date-until.")
-        if old_model is not None or new_model is not None:
-            raise click.UsageError("pipeline mode does not use --old or --new.")
-        total = 0
-        for batch in stream_analysis_and_cleaning_pipeline("config.yaml"):
-            total += len(batch)
-        print(f"Pipeline finished. Total cleaned rows: {total}")
+            raise click.UsageError("analyse mode does not use --old or --new.")
+        run_automatic_eda(CONFIG_PATH, load_eda_rows_from_db(CONFIG_PATH))
         return
 
     has_csv = path_csv is not None
@@ -198,7 +167,7 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear):
         if old_model is None or new_model is not None:
             raise click.UsageError("val requires --old and no --new.")
 
-    cfg = load_config("config.yaml")
+    cfg = load_config(CONFIG_PATH)
     models_path = Path(cfg["model_storage"]["models_path"])
 
     if mode == "train":

@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -8,7 +9,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
 
-from src.data.utils import load_config
+from src.data.utils import load_config, load_raw
 
 from .base import BasePreprocessor
 from .feature_engineering import apply_feature_engineering_rows
@@ -298,6 +299,43 @@ def accumulate_xy_from_cleaned_db(
     return preprocessor, X, y
 
 
+def build_train_dataset(
+    cfg,
+    model_name: str,
+    *,
+    config_path: str = "config.yaml",
+    path_csv: Optional[Path] = None,
+    date_until: Optional[str] = None,
+):
+    """
+    High-level train-data builder.
+    Returns ``(preprocessor, X, y)`` where preprocessor follows BasePreprocessor
+    interface (fit/transform) and is ready to serialize with the model.
+    """
+    has_csv = path_csv is not None
+    has_date = date_until is not None
+    if has_csv == has_date:
+        raise ValueError("Choose either path_csv or date_until.")
+
+    if has_csv:
+        X_raw, y = load_raw(path_csv)
+        X_raw = apply_feature_engineering_rows(cfg, X_raw)
+        preprocessor = make_train_matrix_preprocessor(
+            cfg,
+            model_name,
+            config_path=config_path,
+        )
+        preprocessor.fit(X_raw)
+        X, y = features_xy_for_model(preprocessor, X_raw, y, cfg)
+        return preprocessor, X, y
+
+    return accumulate_xy_from_cleaned_db(
+        config_path,
+        model_name,
+        date_le=date_until,
+    )
+
+
 def make_train_matrix_preprocessor(cfg, model_name, config_path="config.yaml"):
     prep = merge_preprocessing_from_config(cfg)
     vname = prep["default_variant"]
@@ -380,6 +418,35 @@ def accumulate_xy_val_from_cleaned_db(
             "No cleaned rows in DB for validation (check date filter and pipeline)."
         )
     return concat_xy_batches(parts_x, parts_y, preprocessor.model_kind)
+
+
+def build_val_dataset(
+    cfg,
+    *,
+    preprocessor,
+    config_path: str = "config.yaml",
+    path_csv: Optional[Path] = None,
+    date_until: Optional[str] = None,
+):
+    """
+    High-level validation-data builder.
+    Returns ``(X, y)`` ready for ``model.evaluate``.
+    """
+    has_csv = path_csv is not None
+    has_date = date_until is not None
+    if has_csv == has_date:
+        raise ValueError("Choose either path_csv or date_until.")
+
+    if has_csv:
+        X_raw, y = load_raw(path_csv)
+        X_raw = apply_feature_engineering_rows(cfg, X_raw)
+        return features_xy_for_model(preprocessor, X_raw, y, cfg)
+
+    return accumulate_xy_val_from_cleaned_db(
+        config_path,
+        preprocessor=preprocessor,
+        date_le=date_until,
+    )
 
 
 if __name__ == "__main__":
