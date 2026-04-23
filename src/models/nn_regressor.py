@@ -1,33 +1,11 @@
 import numpy as np
-import torch
-import torch.nn as nn
+from sklearn.neural_network import MLPRegressor
 
 from .base import BaseRegressor
 
 
-class _MLP(nn.Module):
-    def __init__(self, in_features, hidden_layer_sizes):
-        super().__init__()
-
-        layers = []
-        prev = in_features
-        for h in hidden_layer_sizes:
-            layers += [nn.Linear(prev, h), nn.BatchNorm1d(h), nn.ReLU()]
-            prev = h
-        layers.append(nn.Linear(prev, 1))
-
-        self.net = nn.Sequential(*layers)
-        
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.kaiming_uniform_(m.weight, nonlinearity="relu")
-                nn.init.zeros_(m.bias)
-
-    def forward(self, x):
-        return self.net(x).squeeze(-1)
-
-
 class MLPRegressionModel(BaseRegressor):
+    """Scikit-learn MLP regressor with the same wrapper API as other models."""
 
     def __init__(
         self,
@@ -51,73 +29,40 @@ class MLPRegressionModel(BaseRegressor):
         self.random_state = random_state
         self.loss = str(loss).lower()
         self.huber_delta = float(huber_delta)
-        self._net = None
+        self.model = self._build_model(warm_start=False)
+
+    def _build_model(self, *, warm_start):
+        return MLPRegressor(
+            hidden_layer_sizes=self.hidden_layer_sizes,
+            activation="relu",
+            solver="adam",
+            alpha=1e-4,
+            batch_size=self.batch_size,
+            learning_rate_init=self.lr,
+            max_iter=self.max_epochs,
+            early_stopping=True,
+            validation_fraction=self.val_fraction,
+            n_iter_no_change=self.patience,
+            random_state=self.random_state,
+            warm_start=warm_start,
+        )
 
     def fit(self, X, y, **kwargs):
         kwargs.pop("cat_features", None)
         continue_training = bool(kwargs.pop("continue_training", False))
-        torch.manual_seed(self.random_state)
-        np.random.seed(self.random_state)
 
         X = np.asarray(X, dtype=np.float32)
-        n = len(X)
-        n_val = max(1, int(n * self.val_fraction))
-        perm = np.random.permutation(n)
-        val_idx, train_idx = perm[:n_val], perm[n_val:]
+        y = np.asarray(y, dtype=np.float32)
 
-        X_tr = torch.tensor(X[train_idx], dtype=torch.float32)
-        y_tr = torch.tensor(y[train_idx], dtype=torch.float32)
-        X_val = torch.tensor(X[val_idx], dtype=torch.float32)
-        y_val = torch.tensor(y[val_idx], dtype=torch.float32)
-
-        need_new_net = (
-            (self._net is None)
-            or (not continue_training)
-            or (self._net.net[0].in_features != X_tr.shape[1])
-        )
-        if need_new_net:
-            self._net = _MLP(X_tr.shape[1], self.hidden_layer_sizes)
-        optimizer = torch.optim.Adam(self._net.parameters(), lr=self.lr)
-        if self.loss == "huber":
-            loss_fn = nn.HuberLoss(delta=self.huber_delta)
+        if not continue_training or not hasattr(self.model, "coefs_"):
+            self.model = self._build_model(warm_start=False)
         else:
-            loss_fn = nn.MSELoss()
+            self.model.warm_start = True
+            self.model.max_iter = self.max_epochs
 
-        best_val_loss = float("inf")
-        best_state = None
-        no_improve = 0
-
-        for _ in range(self.max_epochs):
-            self._net.train()
-            idx = torch.randperm(len(X_tr))
-            for start in range(0, len(X_tr), self.batch_size):
-                batch = idx[start : start + self.batch_size]
-                optimizer.zero_grad()
-                loss = loss_fn(self._net(X_tr[batch]), y_tr[batch])
-                loss.backward()
-                nn.utils.clip_grad_norm_(self._net.parameters(), max_norm=1.0)
-                optimizer.step()
-
-            self._net.eval()
-            with torch.no_grad():
-                val_loss = loss_fn(self._net(X_val), y_val).item()
-
-            if val_loss < best_val_loss - 1e-6:
-                best_val_loss = val_loss
-                best_state = {k: v.clone() for k, v in self._net.state_dict().items()}
-                no_improve = 0
-            else:
-                no_improve += 1
-                if no_improve >= self.patience:
-                    break
-
-        if best_state is not None:
-            self._net.load_state_dict(best_state)
-
+        self.model.fit(X, y)
         return self
 
     def predict(self, X):
         X = np.asarray(X, dtype=np.float32)
-        self._net.eval()
-        with torch.no_grad():
-            return self._net(torch.tensor(X, dtype=torch.float32)).numpy()
+        return self.model.predict(X)
