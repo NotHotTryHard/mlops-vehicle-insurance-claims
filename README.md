@@ -111,4 +111,43 @@ python run.py --clear
 ```bash
 uv venv .venv --python 3.10
 source .venv/bin/activate      # или .venv\Scripts\activate
-uv pip install -r requirements.txt
+uv sync --locked
+```
+
+## Docker workflow
+
+Для локальной Docker-ветки используется `Dockerfile`. Образ использует Python 3.10, как указано в `.python-version`, и собирает окружение через `uv sync --locked` по `pyproject.toml` и `uv.lock`, поэтому версии зависимостей фиксируются lock-файлом.
+
+Сборка образа:
+
+```bash
+docker build -t vehicle-claims-mlops .
+```
+
+Подготовка данных и quality-артефактов:
+
+```bash
+docker run --rm \
+  -v "$PWD/datasets:/app/datasets:ro" \
+  -v "$PWD/session:/app/session" \
+  vehicle-claims-mlops \
+  python -m src.data.quality.pipeline
+```
+
+Запуск обучения CatBoost внутри контейнера:
+
+```bash
+docker run --rm \
+  -v "$PWD/datasets:/app/datasets:ro" \
+  -v "$PWD/session:/app/session" \
+  vehicle-claims-mlops \
+  python run.py --mode train --date-until 2012-12-31 --new catboost
+```
+
+Подготовку нужно выполнить перед обучением в чистой `session/`, потому что train использует `session/reports/db_quality.yaml` как контракт набора признаков. Если артефакты уже подготовлены, этот шаг можно пропустить.
+
+Контейнер ожидает, что данные лежат в локальной папке `datasets/`, а рабочие артефакты пишутся в примонтированную папку `session/`. После запуска без захода в контейнер доступны:
+
+- логи обучения: `session/logs/run.log`;
+- SQLite-база и отчеты: `session/data/`, `session/reports/`;
+- сериализованные модели: `session/models/*.pkl`.
