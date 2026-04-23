@@ -1,6 +1,5 @@
 from pathlib import Path
 
-from src.data.database import ensure_db
 from src.data.utils import load_config
 
 from .clean import run_cleaning_summary, stream_cleaned_batches
@@ -24,6 +23,8 @@ def stream_analysis_and_cleaning_pipeline(
 
 def prepare_quality_artifacts(config_path: str = "config.yaml") -> None:
     """Prepare SQLite-backed quality artifacts required by training."""
+    from src.data.database import ensure_db
+
     ensure_db()
     cfg_path = Path(config_path).resolve()
     print("=== Quality report (association rules + thresholds) ===\n")
