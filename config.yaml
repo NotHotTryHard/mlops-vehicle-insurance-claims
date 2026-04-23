@@ -26,7 +26,7 @@ columns:
     - "INSR_END"
 
 batch:
-  size: 10000
+  size: 32768
   sort_by: "INSR_BEGIN"
 
 data_storage:
