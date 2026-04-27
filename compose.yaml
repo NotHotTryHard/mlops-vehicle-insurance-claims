@@ -1,0 +1,21 @@
+# Сборка образа (один раз, или после правок Dockerfile / pyproject.toml / uv.lock) ---
+#   docker build -t mlops-vehicle-insurance-claims:local .
+#
+# Зайти в контейнер (интерактивная оболочка; правки кода на хосте сразу видны) ---
+#   docker run --rm -it -v "$PWD:/app" -v /app/.venv -e PYTHONPATH=/app -w /app mlops-vehicle-insurance-claims:local bash
+#
+# Чтобы не набирать длинный docker run каждый раз — в ~/.zshrc или ~/.bashrc:
+#   alias mlops-dev='docker run --rm -it -v "$PWD:/app" -v /app/.venv -e PYTHONPATH=/app -w /app mlops-vehicle-insurance-claims:local bash'
+services:
+  dev:
+    build: .
+    image: mlops-vehicle-insurance-claims:local
+    working_dir: /app
+    environment:
+      PYTHONPATH: /app
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/app
+      # не даём bind-монту `.` затереть виртуальное окружение из образа
+      - /app/.venv
