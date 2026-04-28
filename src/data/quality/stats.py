@@ -1,5 +1,7 @@
-from collections import Counter, defaultdict
+import pickle
+from collections import Counter
 from datetime import datetime
+from math import sqrt
 from pathlib import Path
 
 import yaml
@@ -13,7 +15,13 @@ class DataStatsGlobalAnalyzer:
         dt_col="INSR_BEGIN", 
         dt_fmt="%d-%b-%y"
     ):
-        self.meta_analyzer = DataMetaAnalyzer(dt_col=dt_col, dt_fmt=dt_fmt, result_path=cfg["data_storage"]["meta_path"])
+        self.meta_analyzer = DataMetaAnalyzer(
+            dt_col=dt_col,
+            dt_fmt=dt_fmt,
+            result_path=cfg["data_storage"]["meta_path"],
+            id_col=cfg["columns"].get("id"),
+            round_precision=round_precision,
+        )
         self.stats_analyzer = DataStatsAnalyzer(cfg, missing_values=missing_values, round_precision=round_precision)
 
     def merge_existing_reports(self, cfg, root: Path) -> None:
@@ -49,6 +57,11 @@ class DataStatsAnalyzer:
                 "min": None,
                 "max": None,
                 "mean": 0.0,
+                "std": 0.0,
+                "welford_mean": 0.0,
+                "welford_m2": 0.0,
+                "zero_count": 0,
+                "zero_frequency": 0.0,
                 "missing": 0,
                 "missing_frequency": 0.0,
                 "nonvalid": 0,
@@ -86,8 +99,20 @@ class DataStatsAnalyzer:
             stats["max"] = float(max_value) if max_value is not None else None
             stats["missing"] = int(prev_stats.get("missing", 0) or 0)
             stats["nonvalid"] = int(prev_stats.get("nonvalid", 0) or 0)
+            stats["zero_count"] = int(prev_stats.get("zero_count", 0) or 0)
+            welford_mean = prev_stats.get("welford_mean")
+            welford_m2 = prev_stats.get("welford_m2")
+            if welford_mean is not None and welford_m2 is not None:
+                stats["welford_mean"] = float(welford_mean)
+                stats["welford_m2"] = float(welford_m2)
+            else:
+                # legacy yaml: std only; can't merge variance correctly
+                stats["welford_mean"] = float(stats["sum"] / stats["count"]) if stats["count"] else 0.0
+                stats["welford_m2"] = 0.0
             # these values are calculated only in _finalize
             stats["mean"] = 0.0
+            stats["std"] = 0.0
+            stats["zero_frequency"] = 0.0
             stats["missing_frequency"] = 0.0
             stats["nonvalid_frequency"] = 0.0
         cat = data.get("categorical_features") or {}
@@ -120,7 +145,14 @@ class DataStatsAnalyzer:
         stats["sum"] += value
         stats["min"] = value if stats["min"] is None else min(stats["min"], value)
         stats["max"] = value if stats["max"] is None else max(stats["max"], value)
-        
+        if value == 0.0:
+            stats["zero_count"] += 1
+        n = stats["count"]
+        delta = value - stats["welford_mean"]
+        stats["welford_mean"] += delta / n
+        delta2 = value - stats["welford_mean"]
+        stats["welford_m2"] += delta * delta2
+
     def _categorical_update(self, column, value):
         stats = self.cat_stats[column]
 
@@ -154,10 +186,19 @@ class DataStatsAnalyzer:
         for column in self.num_features:
             stats = self.num_stats[column]
             total = stats["count"] + stats["missing"] + stats["nonvalid"]
-            if stats["count"]:
-                stats["mean"] = round(stats["sum"] / stats["count"], self.precision)
+            n_valid = stats["count"]
+            if n_valid:
+                stats["mean"] = round(stats["sum"] / n_valid, self.precision)
+                if n_valid > 1:
+                    var = stats["welford_m2"] / (n_valid - 1)
+                    stats["std"] = round(sqrt(var), self.precision) if var > 0 else 0.0
+                else:
+                    stats["std"] = 0.0
+                stats["zero_frequency"] = round(stats["zero_count"] / n_valid, self.precision)
             else:
                 stats["mean"] = 0.0
+                stats["std"] = 0.0
+                stats["zero_frequency"] = 0.0
             if total:
                 stats["missing_frequency"] = round(stats["missing"] / total, self.precision)
                 stats["nonvalid_frequency"] = round(stats["nonvalid"] / total, self.precision)
@@ -198,21 +239,34 @@ class DataStatsAnalyzer:
 class DataMetaAnalyzer:
     def __init__(
         self,
-        dt_col="INSR_BEGIN", 
+        dt_col="INSR_BEGIN",
         dt_fmt="%d-%b-%y",
-        missing_values=[None, ""],
+        missing_values=None,
         result_path=None,
+        id_col=None,
+        round_precision=3,
     ):
         self.dt_col = dt_col
         self.dt_fmt = dt_fmt
         self.result_path = result_path
-        self.missing_values = missing_values
+        self.missing_values = missing_values if missing_values is not None else [None, ""]
+        self.id_col = id_col
+        self.precision = round_precision
 
         self._initialize_stats()
-    
+
+    def _unique_ids_pickle_path(self) -> Path | None:
+        if not self.result_path:
+            return None
+        p = Path(self.result_path)
+        return p.with_name(p.stem + "_unique_ids.pkl")
+
     def _initialize_stats(self):
         self.total_rows = 0
         self.total_missing = 0
+        self.rows_with_any_missing = 0
+        self._unique_ids = set()
+        self._unique_months = set()
         self.min_date = None
         self.max_date = None
         self.loaded_at = datetime.now().isoformat()
@@ -224,6 +278,16 @@ class DataMetaAnalyzer:
             data = yaml.safe_load(f) or {}
         self.total_rows = int(data.get("total_rows", 0) or 0)
         self.total_missing = int(data.get("total_missing", 0) or 0)
+        self.rows_with_any_missing = int(data.get("rows_with_any_missing", 0) or 0)
+        for s in data.get("unique_months") or []:
+            if not s or not isinstance(s, str):
+                continue
+            parts = s.split("-", 1)
+            if len(parts) == 2:
+                try:
+                    self._unique_months.add((int(parts[0]), int(parts[1])))
+                except ValueError:
+                    continue
         min_date, max_date = data.get("min_date"), data.get("max_date")
         if min_date:
             self.min_date = datetime.fromisoformat(str(min_date))
@@ -231,12 +295,24 @@ class DataMetaAnalyzer:
             self.max_date = datetime.fromisoformat(str(max_date))
         if data.get("loaded_at"):
             self.loaded_at = str(data["loaded_at"])
+        pkl = self._unique_ids_pickle_path()
+        if pkl and pkl.is_file():
+            with pkl.open("rb") as fp:
+                self._unique_ids = pickle.load(fp)
 
     def update(self, batch):
-        self.total_rows += len(batch)
+        n = len(batch)
+        self.total_rows += n
         self.total_missing += sum(
             1 for _, row in batch for v in row.values() if v in self.missing_values
         )
+        for _, row in batch:
+            if any(v in self.missing_values for v in row.values()):
+                self.rows_with_any_missing += 1
+            if self.id_col:
+                rid = row.get(self.id_col)
+                if rid not in self.missing_values:
+                    self._unique_ids.add(str(rid).strip())
 
         dates = []
         for _, row in batch:
@@ -246,7 +322,9 @@ class DataMetaAnalyzer:
             try:
                 if isinstance(raw, str):
                     raw = raw.strip()
-                dates.append(datetime.strptime(str(raw), self.dt_fmt))
+                d = datetime.strptime(str(raw), self.dt_fmt)
+                dates.append(d)
+                self._unique_months.add((d.year, d.month))
             except (TypeError, ValueError):
                 continue
 
@@ -257,13 +335,26 @@ class DataMetaAnalyzer:
             self.max_date = batch_max if self.max_date is None else max(self.max_date, batch_max)
 
     def to_dict(self):
-        return {
+        row_miss_freq = 0.0
+        if self.total_rows:
+            row_miss_freq = round(self.rows_with_any_missing / self.total_rows, self.precision)
+        months_sorted = sorted(self._unique_months)
+        unique_months = [f"{y}-{m:02d}" for y, m in months_sorted]
+        out = {
             "total_rows": self.total_rows,
             "total_missing": self.total_missing,
+            "rows_with_any_missing": self.rows_with_any_missing,
+            "row_any_missing_frequency": row_miss_freq,
+            "n_unique_months": len(self._unique_months),
+            "unique_months": unique_months,
             "min_date": self.min_date.isoformat() if self.min_date else None,
             "max_date": self.max_date.isoformat() if self.max_date else None,
             "loaded_at": self.loaded_at,
         }
+        if self.id_col:
+            out["n_unique_ids"] = len(self._unique_ids)
+            out["id_column"] = self.id_col
+        return out
     
     def __str__(self):
         report = "\nData Meta Parameters\n"
@@ -276,3 +367,7 @@ class DataMetaAnalyzer:
         out.parent.mkdir(parents=True, exist_ok=True)
         with out.open("w", encoding="utf-8") as f:
             yaml.dump(self.to_dict(), f, allow_unicode=True, sort_keys=False)
+        pkl = self._unique_ids_pickle_path()
+        if pkl and self.id_col:
+            with pkl.open("wb") as fp:
+                pickle.dump(self._unique_ids, fp, protocol=pickle.HIGHEST_PROTOCOL)
