@@ -66,6 +66,7 @@ def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
     eda_rows: list[dict] = []
 
     analyzer = DataStatsGlobalAnalyzer(cfg, missing_values=(None, ""), round_precision=3, dt_col=dt_col, dt_fmt=dt_fmt)
+    analyzer.merge_existing_reports(cfg, root)
     for source in data_sources:
         print(f"Streaming from {source}...")
         for batch_idx, batch in tqdm.tqdm(enumerate(stream_batches(source, batch_size), start=1)):
@@ -108,7 +109,8 @@ def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
 def ensure_db():
     config_path = "config.yaml"
     cfg = load_config(config_path)
-    db_path = Path(config_path).parent / cfg["data_storage"]["data_path"]
+    root = Path(config_path).parent
+    db_path = root / cfg["data_storage"]["data_path"]
 
     if db_path.exists():
         conn = sqlite3.connect(db_path)
@@ -120,8 +122,23 @@ def ensure_db():
         if count > 0:
             return
 
-    print("DB not found or empty - loading data from config sources...")
-    db_add_tables(config_path)
+    sources = [root / src["path"] for src in cfg.get("data_sources") or []]
+    existing = [p for p in sources if p.is_file()]
+
+    if existing:
+        print(
+            f"DB not found or empty - loading {len(existing)} CSV file(s) from data_sources..."
+        )
+        db_add_tables(config_path, paths=existing)
+        return
+
+    print(
+        "DB not found or empty. "
+        "Creating empty SQLite schema. Load rows with:\n"
+        "  python run.py --mode add_data --path-csv /path/to/file.csv"
+    )
+    conn = db_init(db_path)
+    conn.close()
 
 
 if __name__ == "__main__":

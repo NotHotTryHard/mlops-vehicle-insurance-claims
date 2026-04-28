@@ -258,9 +258,6 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear):
         clear,
     )
     try:
-        if not clear:
-            ensure_db()
-
         if clear:
             db_clear()
             LOGGER.info("cli completed clear=true")
@@ -269,6 +266,8 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear):
         if mode is None:
             raise click.UsageError("Missing option '--mode'.")
 
+        # add_data seeds only the given CSV; db_add_tables creates the DB if missing.
+        # Skip ensure_db here so Docker (no bundled datasets/) does not fail before --path-csv is used.
         if mode == "add_data":
             if path_csv is None:
                 raise click.UsageError("add_data requires --path-csv.")
@@ -279,6 +278,8 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear):
             db_add_tables(config_path=CONFIG_PATH, paths=[path_csv.resolve()])
             LOGGER.info("cli completed mode=add_data path_csv=%s", path_csv.resolve())
             return
+
+        ensure_db()
 
         if mode == "analyse":
             if path_csv is not None or date_until is not None:
