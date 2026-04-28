@@ -24,6 +24,9 @@ def db_clear(config_path="config.yaml"):
     eda_path = stats_path.parent / "eda_profile.html"
     if eda_path.exists():
         eda_path.unlink()
+    unique_ids_path = meta_path.parent / "db_meta_unique_ids.pkl"
+    if unique_ids_path.exists():
+        unique_ids_path.unlink()
     print(f"All reports are deleted.")
 
 

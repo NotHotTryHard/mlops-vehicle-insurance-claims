@@ -3,6 +3,8 @@ from .association import (
     augment_batch_from_specs,
     augment_row_from_specs,
     binner_and_columns_from_stats,
+    load_association_binning,
+    load_association_projection,
     load_rule_feature_specs,
     max_rule_features_from_cfg,
 )
@@ -16,11 +18,12 @@ from .clean import (
 from .eda import load_eda_rows_from_db, run_automatic_eda
 from .quality_report import (
     QualityChecker,
+    build_quality_report,
     load_statistics_bundle,
+    quality_thresholds_from_cfg,
     run_association_rules,
-    run_full_quality_pipeline,
 )
-from .pipeline import stream_analysis_and_cleaning_pipeline
+from .pipeline import iter_cleaned_batches, refresh_quality_artifacts
 from .stats import DataStatsGlobalAnalyzer
 
 
@@ -29,6 +32,8 @@ __all__ = [
     "augment_batch_from_specs",
     "augment_row_from_specs",
     "binner_and_columns_from_stats",
+    "load_association_binning",
+    "load_association_projection",
     "load_rule_feature_specs",
     "max_rule_features_from_cfg",
     "Binner",
@@ -39,10 +44,12 @@ __all__ = [
     "write_feature_matrix_columns_to_quality_yaml",
     "load_eda_rows_from_db",
     "run_automatic_eda",
-    "stream_analysis_and_cleaning_pipeline",
+    "iter_cleaned_batches",
+    "refresh_quality_artifacts",
     "QualityChecker",
     "load_statistics_bundle",
+    "quality_thresholds_from_cfg",
     "run_association_rules",
-    "run_full_quality_pipeline",
+    "build_quality_report",
     "DataStatsGlobalAnalyzer",
 ]

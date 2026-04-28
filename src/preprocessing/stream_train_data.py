@@ -366,13 +366,13 @@ def make_train_matrix_preprocessor(cfg, model_name, config_path="config.yaml"):
 
 
 def stream_full_train_pipeline(config_path="config.yaml", model_name="catboost"):
-    from src.data.quality.pipeline import stream_analysis_and_cleaning_pipeline
+    from src.data.quality.pipeline import iter_cleaned_batches
 
     cfg = load_config(Path(config_path).resolve())
     target_col = cfg["columns"]["target"]
     preprocessor = make_train_matrix_preprocessor(cfg, model_name, config_path=config_path)
     first = True
-    for batch in stream_analysis_and_cleaning_pipeline(config_path):
+    for batch in iter_cleaned_batches(config_path):
         if not batch:
             continue
         batch = apply_feature_engineering_rows(cfg, batch)

@@ -39,10 +39,28 @@ quality:
   thresholds:
     missing_frequency: 0.3
     nonvalid_frequency: 0.2
+    # meta stats (null = never)
+    row_any_missing_frequency: null
+    min_id_uniqueness_ratio: null
+    # numeric stats
+    zero_frequency_warn: 0.95
+    zero_frequency_skip_columns: []
+    cv_warn: 80.0
+    min_abs_mean_for_cv: 0.001
+    # categorical stats
+    max_category_dominance: 0.995
+    # optional: drop numeric features with more than this share of zeros (null = never)
+    drop_if_zero_frequency_above: null
   association:
     n_bins: 10
-    min_support: 0.05
+    binning: quantile
+    exclude_target: true
+    exclude_from_association: []
+    sample_cap_per_column: 25000
+    max_levels_per_categorical: 40
+    min_support: 0.08
     min_confidence: 0.5
+    min_lift: 1.05
     top_k: 8
     rule_confidence_threshold: 0.8
     rule_lift_threshold: 1.2

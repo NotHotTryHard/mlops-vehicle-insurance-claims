@@ -10,31 +10,35 @@ from src.preprocessing.feature_engineering import engineered_numeric_column_name
 from .association import (
     augment_row_from_specs,
     binner_and_columns_from_stats,
+    load_association_binning,
+    load_association_projection,
     load_rule_feature_specs,
     max_rule_features_from_cfg,
 )
+from .quality_report import quality_thresholds_from_cfg
 
 
-def _quality_thresholds(cfg: dict):
-    q = cfg.get("quality") or {}
-    th = q.get("thresholds") or {}
-    return (
-        float(th.get("missing_frequency", 0.3)),
-        float(th.get("nonvalid_frequency", 0.2)),
-    )
-
-
-def _columns_over_thresholds(stats, mf_th, nv_th):
-    # Column names (from saved statistics) that fail global quality thresholds.
+def _columns_over_thresholds(cfg: dict, stats: dict) -> set:
+    thresholds = quality_thresholds_from_cfg(cfg)
     bad = set()
+    missing_limit = thresholds["missing_frequency"]
+    nonvalid_limit = thresholds["nonvalid_frequency"]
     for col, s in stats.get("numeric_features", {}).items():
-        if s.get("missing_frequency", 0) > mf_th:
+        if s.get("missing_frequency", 0) > missing_limit:
             bad.add(col)
-        if s.get("nonvalid_frequency", 0) > nv_th:
+        if s.get("nonvalid_frequency", 0) > nonvalid_limit:
             bad.add(col)
     for col, s in stats.get("categorical_features", {}).items():
-        if s.get("missing_frequency", 0) > mf_th:
+        if s.get("missing_frequency", 0) > missing_limit:
             bad.add(col)
+    drop_z = thresholds.get("drop_if_zero_frequency_above")
+    if drop_z is not None:
+        skip = set(thresholds.get("zero_frequency_skip_columns") or [])
+        for col, s in stats.get("numeric_features", {}).items():
+            if col in skip:
+                continue
+            if (s.get("zero_frequency") or 0) > drop_z:
+                bad.add(col)
     return bad
 
 
@@ -51,6 +55,7 @@ class DataCleaner:
         self.id_col = cfg["columns"].get("id")
 
         self.rule_feature_specs = []
+        self._association_projection = None
         self._binner = None
         self._binner_num_cols = None
         self._binner_cat_cols = None
@@ -62,14 +67,19 @@ class DataCleaner:
             self.rule_feature_specs = load_rule_feature_specs(qp, max_n=max_rf)
             if self.rule_feature_specs:
                 n_bins = int(assoc.get("n_bins", 10))
+                association_binning = load_association_binning(qp)
+                self._association_projection = load_association_projection(qp)
                 self._binner, self._binner_num_cols, self._binner_cat_cols = (
                     binner_and_columns_from_stats(
-                        cfg, stats, n_bins, missing_values=missing_values
+                        cfg,
+                        stats,
+                        n_bins,
+                        missing_values=missing_values,
+                        association_binning=association_binning,
                     )
                 )
 
-        mf_th, nv_th = _quality_thresholds(cfg)
-        bad_global = _columns_over_thresholds(stats, mf_th, nv_th)
+        bad_global = _columns_over_thresholds(cfg, stats)
 
         feature_names = get_all_features(cfg)
         self._feature_set = set(feature_names)
@@ -145,6 +155,7 @@ class DataCleaner:
                 self._binner,
                 self._binner_num_cols,
                 self._binner_cat_cols,
+                association_projection=self._association_projection,
             )
             out.update(extra)
         return out
@@ -241,4 +252,4 @@ def run_cleaning_summary(config_path: str = "config.yaml"):
 
 
 if __name__ == "__main__":
-    run_cleaning_summary(cfg)
+    run_cleaning_summary("config.yaml")

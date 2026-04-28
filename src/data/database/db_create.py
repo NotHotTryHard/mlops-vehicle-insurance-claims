@@ -43,7 +43,13 @@ def db_init(db_path):
     return conn
 
 
-def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
+def db_add_tables(
+    config_path="config.yaml",
+    paths=None,
+    max_batches=None,
+    *,
+    run_quality: bool = True,
+):
     cfg_path = Path(config_path)
     cfg = load_config(cfg_path)
     root = cfg_path.parent
@@ -103,6 +109,10 @@ def db_add_tables(config_path="config.yaml", paths=None, max_batches=None):
     print(f"Done. SQLite DB: {db_path}")
     print(analyzer.meta_analyzer)
     analyzer.save_report()
+    if run_quality:
+        from src.data.quality.pipeline import refresh_quality_artifacts
+
+        refresh_quality_artifacts(str(cfg_path.resolve()))
     run_automatic_eda(str(cfg_path.resolve()), eda_rows)
 
 
@@ -129,7 +139,7 @@ def ensure_db():
         print(
             f"DB not found or empty - loading {len(existing)} CSV file(s) from data_sources..."
         )
-        db_add_tables(config_path, paths=existing)
+        db_add_tables(config_path, paths=existing, run_quality=False)
         return
 
     print(
