@@ -1,9 +1,11 @@
+import warnings
 from pathlib import Path
 
 import pandas as pd
 
 from src.data.database.db_stream import db_stream
 from src.data.utils import get_all_features, load_config
+from tqdm import tqdm
 
 
 def eda_column_names(cfg: dict) -> list[str]:
@@ -35,30 +37,19 @@ def build_dataframe_from_rows(cfg: dict, rows: list[dict]) -> pd.DataFrame:
     return _coerce_numeric_columns_for_eda(df, cfg)
 
 
-def _collect_rows_from_db(config_path, max_rows, columns):
-    rows = []
-    n = 0
-    batch_size = min(5000, max_rows)
-    for batch in db_stream(batch_size=batch_size):
-        for row in batch:
-            rec = {}
-            for c in columns:
-                if c in row:
-                    rec[c] = row[c]
-            rows.append(rec)
-            n += 1
-            if n >= max_rows:
-                return rows
-    return rows
-
-
 def load_eda_rows_from_db(config_path: str = "config.yaml") -> list[dict]:
-    """Sample rows from the DB for EDA (e.g. ``--mode eda``)."""
     cfg = load_config(Path(config_path).resolve())
     eda_cfg = cfg.get("eda") or {}
-    max_rows = int(eda_cfg.get("max_rows", 30_000))
+    max_rows = int(eda_cfg.get("max_rows", 30000))
     columns = eda_column_names(cfg)
-    return _collect_rows_from_db(config_path, max_rows, columns)
+    rows = []
+    batch_size = min(5000, max_rows)
+    for batch in tqdm(db_stream(batch_size=batch_size), desc="Constructing EDA report..."):
+        for row in batch:
+            rows.append({c: row[c] for c in columns if c in row})
+            if len(rows) >= max_rows:
+                return rows
+    return rows
 
 
 def _fallback_html_report(df: pd.DataFrame, title: str) -> str:
@@ -82,14 +73,19 @@ def _write_eda_profile(cfg: dict, df: pd.DataFrame, config_path: str) -> str | N
     minimal = bool(eda_cfg.get("minimal_profile", True))
 
     try:
-        from ydata_profiling import ProfileReport
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            from ydata_profiling import ProfileReport
 
-        profile = ProfileReport(df, title=title, minimal=minimal)
-        profile.to_file(out_path)
-    except ImportError:
+            profile = ProfileReport(df, title=title, minimal=minimal)
+            profile.to_file(out_path)
+    except Exception as e:
         html = _fallback_html_report(df, title)
         out_path.write_text(html, encoding="utf-8")
-        print("ydata-profiling not installed; wrote fallback HTML (describe + corr).")
+        print(
+            f"ydata-profiling skipped ({type(e).__name__}: {e}); "
+            "wrote fallback HTML (describe + corr)."
+        )
 
     print(f"EDA report written to {out_path}")
     return str(out_path)

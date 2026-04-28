@@ -12,6 +12,7 @@ dependencies = [
     "pandas>=2.3.3",
     "pyyaml>=6.0.3",
     "scikit-learn>=1.7.2",
+    "setuptools>=70,<82",  # pkg_resources (ydata-profiling) removed in setuptools 82+
     "tqdm>=4.67.3",
     "ydata-profiling>=4.18.3",
 ]

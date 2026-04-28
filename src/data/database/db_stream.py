@@ -46,8 +46,8 @@ def db_stream(
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     cur.execute(query, params)
+    batch = []
     try:
-        batch = []
         while True:
             rows = cur.fetchmany(fetch_size)
             if not rows:
@@ -59,7 +59,7 @@ def db_stream(
             if len(batch) == batch_size:
                 yield batch
                 batch = []
-    finally:
-        if len(batch):
+        if batch:
             yield batch
+    finally:
         conn.close()

@@ -7,7 +7,7 @@ from pathlib import Path
 import tqdm
 
 from src.data.utils import load_config, parse_date
-from src.data.quality.eda import eda_column_names, run_automatic_eda
+from src.data.quality.eda import load_eda_rows_from_db, run_automatic_eda
 from src.data.quality.stats import DataStatsGlobalAnalyzer
 
 
@@ -66,11 +66,6 @@ def db_add_tables(
     conn = db_init(db_path)
     cur = conn.cursor()
 
-    eda_cfg = cfg.get("eda") or {}
-    eda_max = int(eda_cfg.get("max_rows", 30_000))
-    eda_cols = eda_column_names(cfg)
-    eda_rows: list[dict] = []
-
     analyzer = DataStatsGlobalAnalyzer(cfg, missing_values=(None, ""), round_precision=3, dt_col=dt_col, dt_fmt=dt_fmt)
     analyzer.merge_existing_reports(cfg, root)
     for source in data_sources:
@@ -78,11 +73,6 @@ def db_add_tables(
         for batch_idx, batch in tqdm.tqdm(enumerate(stream_batches(source, batch_size), start=1)):
             loaded_at = datetime.now().isoformat(timespec="seconds")
             analyzer.update(batch)
-            if len(eda_rows) < eda_max:
-                for _row_num, row in batch:
-                    if len(eda_rows) >= eda_max:
-                        break
-                    eda_rows.append({c: row.get(c) for c in eda_cols})
             rows_to_insert = [
                 (
                     str(source),
@@ -113,7 +103,8 @@ def db_add_tables(
         from src.data.quality.pipeline import refresh_quality_artifacts
 
         refresh_quality_artifacts(str(cfg_path.resolve()))
-    run_automatic_eda(str(cfg_path.resolve()), eda_rows)
+    # Sample from SQLite so the report reflects the full DB after this load (incremental add_data included).
+    run_automatic_eda(str(cfg_path.resolve()), load_eda_rows_from_db(str(cfg_path.resolve())))
 
 
 def ensure_db():
