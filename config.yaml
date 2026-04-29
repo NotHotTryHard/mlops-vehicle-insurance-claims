@@ -147,6 +147,12 @@ training:
     report_path: "session/reports/model_drift_report.yaml"
     history_path: "session/reports/model_metrics_history.yaml"
 
+  profiler:
+    enabled: true
+    time: true
+    memory: true
+    output_dir: "session/reports/profiles"
+
 models:
   catboost:
     loss_function: RMSE

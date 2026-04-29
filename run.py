@@ -14,6 +14,7 @@ from src.training.monitoring import (
     ModelDriftPolicyError,
     append_metrics_history_entry,
     record_val_model_drift,
+    run_profiled,
 )
 from src.training.models import (
     CatBoostRegressionModel,
@@ -527,39 +528,52 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear, drift_ref):
             if old_model is None or new_model is not None:
                 raise click.UsageError("val requires --old and no --new.")
 
+        project_root = Path(config_resolved).parent
         if mode == "train":
             if new_model is not None:
-                train_call(
-                    path_csv,
-                    date_until,
-                    new_model,
-                    models_path,
-                    cfg,
-                    config_path=config_resolved,
-                )
+
+                def _train_go():
+                    train_call(
+                        path_csv,
+                        date_until,
+                        new_model,
+                        models_path,
+                        cfg,
+                        config_path=config_resolved,
+                    )
+
+                run_profiled(cfg, project_root, "train", _train_go, LOGGER)
             else:
-                update_call(
+
+                def _update_go():
+                    update_call(
+                        path_csv,
+                        date_until,
+                        train_parent,
+                        models_path,
+                        cfg,
+                        config_path=config_resolved,
+                        parent_source=(
+                            "CLI --old"
+                            if old_model is not None
+                            else "config.yaml incremental_training"
+                        ),
+                    )
+
+                run_profiled(cfg, project_root, "update", _update_go, LOGGER)
+        elif mode == "val":
+
+            def _val_go():
+                val_call(
                     path_csv,
                     date_until,
-                    train_parent,
+                    old_model,
                     models_path,
                     cfg,
                     config_path=config_resolved,
-                    parent_source=(
-                        "CLI --old"
-                        if old_model is not None
-                        else "config.yaml incremental_training"
-                    ),
                 )
-        elif mode == "val":
-            val_call(
-                path_csv,
-                date_until,
-                old_model,
-                models_path,
-                cfg,
-                config_path=config_resolved,
-            )
+
+            run_profiled(cfg, project_root, "val", _val_go, LOGGER)
 
         LOGGER.info("cli completed mode=%s", mode)
     except DataDriftPolicyError as exc:

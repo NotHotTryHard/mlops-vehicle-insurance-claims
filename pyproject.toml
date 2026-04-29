@@ -7,9 +7,11 @@ requires-python = ">=3.10"
 dependencies = [
     "catboost>=1.2.10",
     "click>=8.3.2",
+    "memray>=1.15.0",
     "mlxtend>=0.23.4",
     "numpy>=2.2.6",
     "pandas>=2.3.3",
+    "pyinstrument>=5.0.0",
     "pyyaml>=6.0.3",
     "scikit-learn>=1.7.2",
     "setuptools>=70,<82",  # pkg_resources (ydata-profiling) removed in setuptools 82+
