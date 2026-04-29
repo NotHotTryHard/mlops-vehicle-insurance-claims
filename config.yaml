@@ -82,6 +82,8 @@ quality:
     reference_path: "session/reports/drift_reference.yaml"
     report_path: "session/reports/drift_report.yaml"
     run_check_after_add_data: true
+    fail_on: null
+    fail_on_incomplete: false
     mean_shift_sigma_warn: 2.0
     mean_shift_sigma_critical: 4.0
     std_ratio_warn_low: 0.5

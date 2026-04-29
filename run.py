@@ -7,6 +7,7 @@ from typing import Optional
 import click
 
 from src.data.database import build_drift_reference, db_add_tables, db_clear, ensure_db
+from src.data.quality.drift import DataDriftPolicyError
 from src.data.utils import load_config
 from src.data.quality.eda import load_eda_rows_from_db, run_automatic_eda
 from src.models import CatBoostRegressionModel, MLPRegressionModel
@@ -333,6 +334,9 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear, drift_ref):
             val_call(path_csv, date_until, old_model, models_path, cfg)
 
         LOGGER.info("cli completed mode=%s", mode)
+    except DataDriftPolicyError as exc:
+        LOGGER.error("cli blocked by drift policy mode=%s: %s", mode, exc)
+        raise
     except Exception:
         LOGGER.exception("cli failed mode=%s drift_ref=%s", mode, drift_ref)
         raise

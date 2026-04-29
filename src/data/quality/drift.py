@@ -9,12 +9,20 @@ from src.data.utils import load_config
 
 _EPS = 1e-9
 
+_DRIFT_STATUS_RANK = {"ok": 0, "warn": 1, "critical": 2}
+
+
+class DataDriftPolicyError(RuntimeError):
+    """Raised when quality.drift.fail_on (or incomplete-check) blocks the pipeline."""
+
 
 def _default_drift_settings() -> dict[str, Any]:
     return {
         "reference_path": "session/reports/drift_reference.yaml",
         "report_path": "session/reports/drift_report.yaml",
         "run_check_after_add_data": False,
+        "fail_on": None,
+        "fail_on_incomplete": False,
         "mean_shift_sigma_warn": 2.0,
         "mean_shift_sigma_critical": 4.0,
         "std_ratio_warn_low": 0.5,
@@ -241,6 +249,47 @@ def _compare_reference_and_current_statistics(
     return {"numeric": numeric_metrics_by_column, "categorical": categorical_metrics_by_column}
 
 
+def _normalize_fail_on(value: Any) -> str | None:
+    if value in (None, "", False):
+        return None
+    text = str(value).strip().lower()
+    if text in ("none", "off", "false", "no"):
+        return None
+    if text in ("warn", "warning", "warnings"):
+        return "warn"
+    if text in ("critical", "crit"):
+        return "critical"
+    return None
+
+
+def enforce_drift_policy(
+    report: dict[str, Any], drift_configuration: dict[str, Any]
+) -> None:
+    """
+    Raise DataDriftPolicyError if the report violates fail_on / fail_on_incomplete.
+
+    fail_on values (after normalization): warn — block on warn or critical;
+    critical — block only on critical. Incomplete runs (no reference/current) are
+    controlled separately by fail_on_incomplete.
+    """
+    status = str(report.get("status") or "ok")
+    if status in ("no_reference", "no_current"):
+        if drift_configuration.get("fail_on_incomplete"):
+            raise DataDriftPolicyError(
+                f"Drift check incomplete ({status}): {report.get('message', '')}"
+            )
+        return
+    fail_on = _normalize_fail_on(drift_configuration.get("fail_on"))
+    if fail_on is None:
+        return
+    threshold_rank = _DRIFT_STATUS_RANK[fail_on]
+    current_rank = _DRIFT_STATUS_RANK.get(status, 0)
+    if current_rank >= threshold_rank:
+        raise DataDriftPolicyError(
+            f"Data drift status={status!r} violates quality.drift.fail_on={fail_on!r}."
+        )
+
+
 def derive_drift_actions(report: dict[str, Any]) -> list[str]:
     overall_status = report.get("status")
     if overall_status == "no_reference":
@@ -294,10 +343,19 @@ def run_drift_monitor(config_path: str = "config.yaml") -> dict[str, Any]:
     """
     Compare ``statistics_path`` (current global stats) to the frozen reference YAML.
     Writes ``drift.report_path`` and returns the report dict.
+
+    If ``quality.drift.fail_on`` is set, may raise ``DataDriftPolicyError`` after the
+    report (including a ``handling`` section) is written.
     """
     resolved_config_path = Path(config_path).resolve()
     config = load_config(resolved_config_path)
     drift_thresholds = drift_settings(config)
+    raw_fail_on = drift_thresholds.get("fail_on")
+    if raw_fail_on not in (None, "", False) and _normalize_fail_on(raw_fail_on) is None:
+        print(
+            f"Warning: quality.drift.fail_on={raw_fail_on!r} is ignored "
+            "(use null, 'warn', or 'critical')."
+        )
     _, reference_statistics_path, drift_report_output_path = _resolve_drift_file_paths(
         resolved_config_path, config
     )
@@ -369,10 +427,27 @@ def run_drift_monitor(config_path: str = "config.yaml") -> dict[str, Any]:
         }
         report["actions"] = derive_drift_actions(report)
 
+    policy_exc: DataDriftPolicyError | None = None
+    try:
+        enforce_drift_policy(report, drift_thresholds)
+    except DataDriftPolicyError as exc:
+        policy_exc = exc
+    fail_on_raw = drift_thresholds.get("fail_on")
+    report["handling"] = {
+        "fail_on": _normalize_fail_on(fail_on_raw),
+        "fail_on_raw": fail_on_raw,
+        "fail_on_incomplete": bool(drift_thresholds.get("fail_on_incomplete")),
+        "outcome": "blocked" if policy_exc else "passed",
+    }
+    if policy_exc is not None:
+        report["handling"]["detail"] = str(policy_exc)
+
     drift_report_output_path.parent.mkdir(parents=True, exist_ok=True)
     with drift_report_output_path.open("w", encoding="utf-8") as yaml_output_file:
         yaml.dump(report, yaml_output_file, allow_unicode=True, sort_keys=False)
     print(
         f"Drift report written: {drift_report_output_path} (status={report['status']})"
     )
+    if policy_exc is not None:
+        raise policy_exc
     return report

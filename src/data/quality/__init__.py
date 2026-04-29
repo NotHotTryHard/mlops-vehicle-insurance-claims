@@ -16,8 +16,10 @@ from .clean import (
     write_feature_matrix_columns_to_quality_yaml,
 )
 from .drift import (
+    DataDriftPolicyError,
     derive_drift_actions,
     drift_settings,
+    enforce_drift_policy,
     freeze_drift_reference,
     load_statistics_yaml,
     run_drift_monitor,
@@ -49,8 +51,10 @@ __all__ = [
     "run_cleaning_summary",
     "stream_cleaned_batches",
     "write_feature_matrix_columns_to_quality_yaml",
+    "DataDriftPolicyError",
     "derive_drift_actions",
     "drift_settings",
+    "enforce_drift_policy",
     "freeze_drift_reference",
     "load_statistics_yaml",
     "run_drift_monitor",
