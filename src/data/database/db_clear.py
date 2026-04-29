@@ -15,18 +15,10 @@ def db_clear(config_path="config.yaml"):
         print(f"Database deleted: {db_path}")
 
     # delete all reports
-    stats_path = cfg_path.parent / cfg["data_storage"]["statistics_path"]
-    meta_path = cfg_path.parent / cfg["data_storage"]["meta_path"]
-    quality_path = cfg_path.parent / cfg["data_storage"]["quality_path"]
-    for path in [stats_path, meta_path, quality_path]:
-        if path.exists():
-            path.unlink()
-    eda_path = stats_path.parent / "eda_profile.html"
-    if eda_path.exists():
-        eda_path.unlink()
-    unique_ids_path = meta_path.parent / "db_meta_unique_ids.pkl"
-    if unique_ids_path.exists():
-        unique_ids_path.unlink()
+    report_folder = (cfg_path.parent / cfg["data_storage"]["statistics_path"]).parent
+    for file in report_folder.glob("*"):
+        if file.is_file():
+            file.unlink()
     print(f"All reports are deleted.")
 
 

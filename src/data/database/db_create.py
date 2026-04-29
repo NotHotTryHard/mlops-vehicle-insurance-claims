@@ -48,7 +48,9 @@ def db_add_tables(
     paths=None,
     max_batches=None,
     *,
-    run_quality: bool = True,
+    run_quality=True,
+    run_eda=True,
+    run_drift_check=True,
 ):
     cfg_path = Path(config_path)
     cfg = load_config(cfg_path)
@@ -103,8 +105,43 @@ def db_add_tables(
         from src.data.quality.pipeline import refresh_quality_artifacts
 
         refresh_quality_artifacts(str(cfg_path.resolve()))
-    # Sample from SQLite so the report reflects the full DB after this load (incremental add_data included).
-    run_automatic_eda(str(cfg_path.resolve()), load_eda_rows_from_db(str(cfg_path.resolve())))
+    if run_eda:
+        run_automatic_eda(
+            str(cfg_path.resolve()), load_eda_rows_from_db(str(cfg_path.resolve()))
+        )
+    if run_drift_check:
+        drift_section = (cfg.get("quality") or {}).get("drift") or {}
+        if drift_section.get("run_check_after_add_data"):
+            from src.data.quality.drift import run_drift_monitor
+
+            run_drift_monitor(str(cfg_path.resolve()))
+
+
+def build_drift_reference(config_path="config.yaml", clear_existing=True, max_batches=None):
+    cfg_path = Path(config_path).resolve()
+    cfg = load_config(cfg_path)
+    root = cfg_path.parent
+    sources = [root / entry["path"] for entry in cfg.get("data_sources") or []]
+    existing_paths = [path for path in sources if path.is_file()]
+    if not existing_paths:
+        raise FileNotFoundError(
+            "build_drift_reference: no files found for data_sources; check paths in config."
+        )
+    if clear_existing:
+        from src.data.database.db_clear import db_clear
+
+        db_clear(str(cfg_path))
+    db_add_tables(
+        str(cfg_path),
+        paths=existing_paths,
+        max_batches=max_batches,
+        run_quality=False,
+        run_eda=False,
+        run_drift_check=False,
+    )
+    from src.data.quality.drift import freeze_drift_reference
+
+    freeze_drift_reference(str(cfg_path))
 
 
 def ensure_db():

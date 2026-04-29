@@ -35,6 +35,7 @@ def _association_kwargs(cfg):
         "exclude_from_association": list(assoc.get("exclude_from_association") or []),
         "sample_cap_per_column": int(assoc.get("sample_cap_per_column", 25_000)),
         "max_levels_per_categorical": int(assoc.get("max_levels_per_categorical", 40)),
+        "max_transactions": int(assoc.get("max_transactions", 60_000)),
     }
 
 
@@ -189,8 +190,9 @@ class AssociationRulesAnalyzer:
         binning: str = "quantile",
         exclude_target: bool = True,
         exclude_from_association=None,
-        sample_cap_per_column: int = 25_000,
+        sample_cap_per_column: int = 25000,
         max_levels_per_categorical: int = 40,
+        max_transactions: int = 60000,
         target_column: str | None = None,
     ):
         self.n_bins = n_bins
@@ -209,6 +211,7 @@ class AssociationRulesAnalyzer:
         self.exclude_target = exclude_target
         self.target_column = target_column
         self.sample_cap_per_column = max(1000, sample_cap_per_column)
+        self.max_transactions = max(5000, int(max_transactions))
 
         exclude = set(exclude_from_association or [])
         if exclude_target and target_column:
@@ -367,11 +370,11 @@ class AssociationRulesAnalyzer:
             return pd.DataFrame()
 
         nuniq = len({it for t in self.transactions for it in t})
-        if nuniq > 12_000:
+        if nuniq > 2_500:
             raise ValueError(
                 f"Association mining: {nuniq} distinct items after compression — "
-                "increase quality.association.min_support or lower n_bins / "
-                "max_levels_per_categorical."
+                "raise quality.association.min_support, lower n_bins / "
+                "max_levels_per_categorical, or reduce max_transactions."
             )
 
         te = TransactionEncoder()
@@ -475,6 +478,13 @@ class AssociationRulesAnalyzer:
 
     def mine_and_report(self):
         self._compress_transactions_for_apriori()
+        n_tx = len(self.transactions)
+        if n_tx > self.max_transactions:
+            self.transactions = random.sample(self.transactions, self.max_transactions)
+            print(
+                f"Association: subsampled transactions {n_tx} -> {self.max_transactions} "
+                f"(quality.association.max_transactions)."
+            )
         rules = self._mine_rules_dataframe()
         top = self.select_top_k_rules(rules)
         report = self.analyze_rules(top)

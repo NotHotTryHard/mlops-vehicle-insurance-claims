@@ -6,7 +6,7 @@ from typing import Optional
 
 import click
 
-from src.data.database import db_add_tables, db_clear, ensure_db
+from src.data.database import build_drift_reference, db_add_tables, db_clear, ensure_db
 from src.data.utils import load_config
 from src.data.quality.eda import load_eda_rows_from_db, run_automatic_eda
 from src.models import CatBoostRegressionModel, MLPRegressionModel
@@ -214,6 +214,13 @@ def val_call(
     help="train | val | add_data | analyse",
 )
 @click.option(
+    "--drift-ref",
+    "drift_ref",
+    is_flag=True,
+    default=False,
+    help="Reload data_sources, write meta/statistics only, freeze drift reference YAML (no quality/EDA; no --mode).",
+)
+@click.option(
     "--path-csv",
     type=click.Path(exists=True, path_type=Path),
     default=None,
@@ -246,16 +253,17 @@ def val_call(
     default=False,
     help="Clear database and model files",
 )
-def cli(mode, path_csv, date_until, old_model, new_model, clear):
+def cli(mode, path_csv, date_until, old_model, new_model, clear, drift_ref):
     setup_logging()
     LOGGER.info(
-        "cli started mode=%s path_csv=%s date_until=%s old=%s new=%s clear=%s",
+        "cli started mode=%s path_csv=%s date_until=%s old=%s new=%s clear=%s drift_ref=%s",
         mode,
         path_csv,
         date_until,
         old_model,
         new_model,
         clear,
+        drift_ref,
     )
     try:
         if clear:
@@ -263,8 +271,19 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear):
             LOGGER.info("cli completed clear=true")
             return
 
+        if drift_ref:
+            if mode is not None:
+                raise click.UsageError("Use --drift-ref without --mode.")
+            if path_csv is not None or date_until is not None:
+                raise click.UsageError("--drift-ref does not accept --path-csv or --date-until.")
+            if old_model is not None or new_model is not None:
+                raise click.UsageError("--drift-ref does not accept --old or --new.")
+            build_drift_reference(CONFIG_PATH)
+            LOGGER.info("cli completed --drift-ref")
+            return
+
         if mode is None:
-            raise click.UsageError("Missing option '--mode'.")
+            raise click.UsageError("Missing option '--mode' (or use --drift-ref alone).")
 
         # add_data seeds only the given CSV; db_add_tables creates the DB if missing.
         # Skip ensure_db here so Docker (no bundled datasets/) does not fail before --path-csv is used.
@@ -315,7 +334,7 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear):
 
         LOGGER.info("cli completed mode=%s", mode)
     except Exception:
-        LOGGER.exception("cli failed mode=%s", mode)
+        LOGGER.exception("cli failed mode=%s drift_ref=%s", mode, drift_ref)
         raise
 
 

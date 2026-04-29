@@ -16,7 +16,7 @@ def _optional_float(x):
 
 def quality_thresholds_from_cfg(cfg: dict) -> dict:
     quality = cfg.get("quality") or {}
-    thresholds = quality.get("thresholds") or {}
+    thresholds = quality.get("stats_thresholds") or quality.get("thresholds") or {}
     target = (cfg.get("columns") or {}).get("target")
     skip_zero = list(thresholds.get("zero_frequency_skip_columns") or [])
     if target and target not in skip_zero:

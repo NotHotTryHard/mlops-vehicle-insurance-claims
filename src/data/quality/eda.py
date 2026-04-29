@@ -39,8 +39,9 @@ def build_dataframe_from_rows(cfg: dict, rows: list[dict]) -> pd.DataFrame:
 
 def load_eda_rows_from_db(config_path: str = "config.yaml") -> list[dict]:
     cfg = load_config(Path(config_path).resolve())
-    eda_cfg = cfg.get("eda") or {}
-    max_rows = int(eda_cfg.get("max_rows", 30000))
+    quality_section = cfg.get("quality") or {}
+    eda_section = quality_section.get("eda") or {}
+    max_rows = int(eda_section.get("max_rows", 30000))
     columns = eda_column_names(cfg)
     rows = []
     batch_size = min(5000, max_rows)
@@ -64,13 +65,14 @@ def _fallback_html_report(df: pd.DataFrame, title: str) -> str:
 
 
 def _write_eda_profile(cfg: dict, df: pd.DataFrame, config_path: str) -> str | None:
-    eda_cfg = cfg.get("eda") or {}
-    out_rel = eda_cfg.get("report_path", "session/reports/eda_profile.html")
+    quality_section = cfg.get("quality") or {}
+    eda_section = quality_section.get("eda") or {}
+    out_rel = eda_section.get("report_path", "session/reports/eda_profile.html")
     out_path = Path(config_path).resolve().parent / out_rel
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    title = eda_cfg.get("title", "Automatic EDA")
-    minimal = bool(eda_cfg.get("minimal_profile", True))
+    title = eda_section.get("title", "Automatic EDA")
+    minimal = bool(eda_section.get("minimal_profile", True))
 
     try:
         with warnings.catch_warnings():
