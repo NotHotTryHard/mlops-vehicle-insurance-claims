@@ -11,6 +11,7 @@ __REPORTS_TO_DELETE__ = [
     "db_meta.yaml",
     "db_meta_unique_ids.pkl",
     "db_statistics.yaml",
+    "model_drift_report.yaml",
 ]
 
 def db_clear(config_path="config.yaml"):

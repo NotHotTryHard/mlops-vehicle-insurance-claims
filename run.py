@@ -10,6 +10,11 @@ from tqdm import tqdm
 from src.data.database import build_drift_reference, db_add_tables, db_clear, ensure_db
 from src.data.quality.drift import DataDriftPolicyError
 from src.data.utils import load_config
+from src.monitoring.model_drift import (
+    ModelDriftPolicyError,
+    append_metrics_history_entry,
+    record_val_model_drift,
+)
 from src.data.quality.eda import load_eda_rows_from_db, run_automatic_eda
 from src.models import CatBoostRegressionModel, MLPRegressionModel
 from src.preprocessing import (
@@ -227,6 +232,15 @@ def train_call(
     )
     print(f"Saved: {name}")
     print(metrics)
+    append_metrics_history_entry(
+        cfg,
+        Path(config_path).resolve().parent,
+        {
+            "phase": "train",
+            "model_bundle": name,
+            "metrics": dict(metrics),
+        },
+    )
 
 
 def update_call(
@@ -242,7 +256,8 @@ def update_call(
     data_ref = f"path_csv={path_csv}" if path_csv is not None else f"date_until={date_until}"
     inc_msg = (
         f"Incremental training: parent bundle={old_model!r} "
-        f"Applying model.update() on loaded bundle."
+        f"(parent from {parent_source}); data: {data_ref}. "
+        f"Calling model.update() on loaded bundle."
     )
     print(inc_msg, flush=True)
     LOGGER.info(inc_msg)
@@ -297,6 +312,16 @@ def update_call(
     )
     print(f"Updated and saved: {name} (from {old_model})")
     print(metrics)
+    append_metrics_history_entry(
+        cfg,
+        Path(config_path).resolve().parent,
+        {
+            "phase": "update",
+            "model_bundle": name,
+            "parent_model": old_model,
+            "metrics": dict(metrics),
+        },
+    )
 
 
 def val_call(
@@ -327,6 +352,18 @@ def val_call(
     metrics = bundle["model"].evaluate(X, y)
     LOGGER.info("val_call metrics=%s old_model=%s", metrics, old_model)
     print(metrics)
+    root = Path(config_path).resolve().parent
+    data_note = (
+        f"path_csv={path_csv}" if path_csv is not None else f"date_until={date_until}"
+    )
+    record_val_model_drift(
+        cfg,
+        root,
+        model_bundle=old_model,
+        baseline_metrics=bundle.get("metrics"),
+        current_metrics=metrics,
+        data_note=data_note,
+    )
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -496,6 +533,9 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear, drift_ref):
         LOGGER.info("cli completed mode=%s", mode)
     except DataDriftPolicyError as exc:
         LOGGER.error("cli blocked by drift policy mode=%s: %s", mode, exc)
+        raise
+    except ModelDriftPolicyError as exc:
+        LOGGER.error("cli blocked by model drift policy mode=%s: %s", mode, exc)
         raise
     except Exception:
         LOGGER.exception("cli failed mode=%s drift_ref=%s", mode, drift_ref)

@@ -132,11 +132,20 @@ preprocessing:
 training:
   validation:
     # holdout | kfold | time_series
-    type: time_series
+    type: holdout
     test_size: 0.2
     random_state: 42
     n_splits: 5
     shuffle: true
+
+  model_drift:
+    enabled: true
+    metric: RMSE
+    warn_ratio: 1.1
+    critical_ratio: 0.1
+    fail_on: critical
+    report_path: "session/reports/model_drift_report.yaml"
+    history_path: "session/reports/model_metrics_history.yaml"
 
 models:
   catboost:
