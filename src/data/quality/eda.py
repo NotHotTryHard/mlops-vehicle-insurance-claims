@@ -45,7 +45,10 @@ def load_eda_rows_from_db(config_path: str = "config.yaml") -> list[dict]:
     columns = eda_column_names(cfg)
     rows = []
     batch_size = min(5000, max_rows)
-    for batch in tqdm(db_stream(batch_size=batch_size), desc="Constructing EDA report..."):
+    for batch in tqdm(
+        db_stream(batch_size=batch_size, config_path=config_path),
+        desc="Constructing EDA report...",
+    ):
         for row in batch:
             rows.append({c: row[c] for c in columns if c in row})
             if len(rows) >= max_rows:

@@ -167,7 +167,7 @@ def ensure_db():
         print(
             f"DB not found or empty - loading {len(existing)} CSV file(s) from data_sources..."
         )
-        db_add_tables(config_path, paths=existing, run_quality=False)
+        db_add_tables(config_path, paths=existing, run_quality=True)
         return
 
     print(

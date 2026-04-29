@@ -117,6 +117,49 @@ def augment_batch_from_specs(
     ]
 
 
+def augment_train_rows_with_rule_features(
+    cfg: dict,
+    rows: list,
+    config_path: str,
+    *,
+    missing_values=(None, ""),
+) -> list:
+    if not rows:
+        return rows
+    cfg_path = Path(config_path).resolve()
+    assoc = (cfg.get("quality") or {}).get("association") or {}
+    if not assoc.get("add_rule_features", True):
+        return rows
+    qp = cfg_path.parent / cfg["data_storage"]["quality_path"]
+    max_rf = max_rule_features_from_cfg(cfg)
+    specs = load_rule_feature_specs(qp, max_n=max_rf)
+    if not specs:
+        return rows
+    stats_path = cfg_path.parent / cfg["data_storage"]["statistics_path"]
+    if not stats_path.is_file():
+        return rows
+    with stats_path.open("r", encoding="utf-8") as f:
+        stats = yaml.safe_load(f) or {}
+    n_bins = int(assoc.get("n_bins", 10))
+    association_binning = load_association_binning(qp)
+    projection = load_association_projection(qp)
+    binner, num_cols, cat_cols = binner_and_columns_from_stats(
+        cfg,
+        stats,
+        n_bins,
+        missing_values=missing_values,
+        association_binning=association_binning,
+    )
+    return augment_batch_from_specs(
+        rows,
+        specs,
+        binner,
+        num_cols,
+        cat_cols,
+        association_projection=projection,
+    )
+
+
 def load_association_binning(quality_path: Path) -> dict | None:
     path = Path(quality_path)
     if not path.is_file():

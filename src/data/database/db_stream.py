@@ -11,8 +11,10 @@ def db_stream(
     date_ge=None,
     date_le=None,
     date_ge_shift_days=0,
+    *,
+    config_path="config.yaml",
 ):
-    cfg_path = Path("config.yaml")
+    cfg_path = Path(config_path).resolve()
     cfg = load_config(cfg_path)
     root = cfg_path.parent
 

@@ -4,6 +4,14 @@ from pathlib import Path
 
 from src.data.utils import load_config
 
+__REPORTS_TO_DELETE__ = [
+    "drift_report.yaml",
+    "eda_profile.html",
+    "db_quality.yaml",
+    "db_meta.yaml",
+    "db_meta_unique_ids.pkl",
+    "db_statistics.yaml",
+]
 
 def db_clear(config_path="config.yaml"):
     cfg_path = Path(config_path)
@@ -16,9 +24,10 @@ def db_clear(config_path="config.yaml"):
 
     # delete all reports
     report_folder = (cfg_path.parent / cfg["data_storage"]["statistics_path"]).parent
-    for file in report_folder.glob("*"):
-        if file.is_file():
-            file.unlink()
+    for name in __REPORTS_TO_DELETE__:
+        path = report_folder / name
+        if path.exists():
+            path.unlink()
     print(f"All reports are deleted.")
 
 

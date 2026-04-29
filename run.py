@@ -5,16 +5,19 @@ from pathlib import Path
 from typing import Optional
 
 import click
+from tqdm import tqdm
 
 from src.data.database import build_drift_reference, db_add_tables, db_clear, ensure_db
 from src.data.quality.drift import DataDriftPolicyError
 from src.data.utils import load_config
 from src.data.quality.eda import load_eda_rows_from_db, run_automatic_eda
 from src.models import CatBoostRegressionModel, MLPRegressionModel
-from src.preprocessing.stream_train_data import (
+from src.preprocessing import (
     build_train_dataset,
     build_val_dataset,
     cat_features_from_frame,
+    load_train_rows_y,
+    preprocess_tune_variant_keys,
 )
 
 _MODEL_SPECS = {
@@ -72,6 +75,8 @@ def train_call(
     new_model: str,
     models_path: Path,
     cfg: dict,
+    *,
+    config_path: str,
 ) -> None:
     LOGGER.info(
         "train_call started path_csv=%s date_until=%s new_model=%s",
@@ -80,13 +85,74 @@ def train_call(
         new_model,
     )
     family = model_family(new_model)
-    preprocessor, X, y = build_train_dataset(
-        cfg,
-        family,
-        config_path=CONFIG_PATH,
-        path_csv=path_csv,
-        date_until=date_until,
+    tune_preprocess = bool(
+        (cfg.get("preprocessing") or {}).get("tune_preprocess_variants")
     )
+
+    if tune_preprocess:
+        rows, y_raw = load_train_rows_y(
+            cfg,
+            config_path=config_path,
+            path_csv=path_csv,
+            date_until=date_until,
+        )
+        variant_keys = preprocess_tune_variant_keys(cfg, family)
+        msg = (
+            f"[train] preprocessing variant sweep: {len(variant_keys)} candidate(s) "
+            f"for model={family!r}: {variant_keys}"
+        )
+        print(msg, flush=True)
+        LOGGER.info("%s", msg)
+        best_rmse = float("inf")
+        best_key: str | None = None
+        for vk in tqdm(variant_keys, desc="preprocess variants", unit="variant"):
+            _, X_try, y_try = build_train_dataset(
+                cfg,
+                family,
+                config_path=config_path,
+                rows=rows,
+                y=y_raw,
+                variant_name=vk,
+            )
+            trial = build_model(new_model)
+            if family == "catboost":
+                trial_metrics = trial.train(
+                    X_try, y_try, cat_features=cat_features_from_frame(X_try)
+                )
+            else:
+                trial_metrics = trial.train(X_try, y_try)
+            rmse = float(trial_metrics["RMSE"])
+            line = f"[train]   variant={vk!r} holdout RMSE={rmse:.6f}"
+            print(line, flush=True)
+            LOGGER.info("preprocess sweep variant=%s holdout_RMSE=%s", vk, rmse)
+            if rmse < best_rmse:
+                best_rmse = rmse
+                best_key = vk
+        assert best_key is not None
+        preprocessor, X, y = build_train_dataset(
+            cfg,
+            family,
+            config_path=config_path,
+            rows=rows,
+            y=y_raw,
+            variant_name=best_key,
+        )
+        LOGGER.info(
+            "selected preprocess variant=%s (best holdout RMSE=%s)",
+            best_key,
+            best_rmse,
+        )
+        vname = best_key
+    else:
+        preprocessor, X, y = build_train_dataset(
+            cfg,
+            family,
+            config_path=config_path,
+            path_csv=path_csv,
+            date_until=date_until,
+        )
+        vname = preprocessor.variant_key
+
     model = build_model(new_model)
     if family == "catboost":
         metrics = model.train(X, y, cat_features=cat_features_from_frame(X))
@@ -94,7 +160,6 @@ def train_call(
         metrics = model.train(X, y)
 
     models_path.mkdir(parents=True, exist_ok=True)
-    vname = output_variant_name(cfg, family)
     name = f"{new_model}_{vname}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     with open(models_path / f"{name}.pkl", "wb") as f:
@@ -105,6 +170,7 @@ def train_call(
                 "variant": vname,
                 "model_name": new_model,
                 "metrics": metrics,
+                "tune_preprocess_variants": tune_preprocess,
             },
             f,
         )
@@ -125,6 +191,8 @@ def update_call(
     old_model: str,
     models_path: Path,
     cfg: dict,
+    *,
+    config_path: str,
 ) -> None:
     LOGGER.info(
         "update_call started path_csv=%s date_until=%s old_model=%s",
@@ -140,7 +208,7 @@ def update_call(
     X, y = build_val_dataset(
         cfg,
         preprocessor=preprocessor,
-        config_path=CONFIG_PATH,
+        config_path=config_path,
         path_csv=path_csv,
         date_until=date_until,
     )
@@ -185,6 +253,8 @@ def val_call(
     old_model: str,
     models_path: Path,
     cfg: dict,
+    *,
+    config_path: str,
 ) -> None:
     LOGGER.info(
         "val_call started path_csv=%s date_until=%s old_model=%s",
@@ -198,7 +268,7 @@ def val_call(
     X, y = build_val_dataset(
         cfg,
         preprocessor=bundle["preprocessor"],
-        config_path=CONFIG_PATH,
+        config_path=config_path,
         path_csv=path_csv,
         date_until=date_until,
     )
@@ -219,7 +289,7 @@ def val_call(
     "drift_ref",
     is_flag=True,
     default=False,
-    help="Reload data_sources, write meta/statistics only, freeze drift reference YAML (no quality/EDA; no --mode).",
+    help="Reload data_sources into DB, write meta/statistics, freeze drift reference (no --mode).",
 )
 @click.option(
     "--path-csv",
@@ -281,6 +351,7 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear, drift_ref):
                 raise click.UsageError("--drift-ref does not accept --old or --new.")
             build_drift_reference(CONFIG_PATH)
             LOGGER.info("cli completed --drift-ref")
+            db_clear()
             return
 
         if mode is None:
@@ -322,16 +393,38 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear, drift_ref):
             if old_model is None or new_model is not None:
                 raise click.UsageError("val requires --old and no --new.")
 
-        cfg = load_config(CONFIG_PATH)
+        config_resolved = str(Path(CONFIG_PATH).resolve())
+        cfg = load_config(config_resolved)
         models_path = Path(cfg["model_storage"]["models_path"])
 
         if mode == "train":
             if new_model is not None:
-                train_call(path_csv, date_until, new_model, models_path, cfg)
+                train_call(
+                    path_csv,
+                    date_until,
+                    new_model,
+                    models_path,
+                    cfg,
+                    config_path=config_resolved,
+                )
             else:
-                update_call(path_csv, date_until, old_model, models_path, cfg)
+                update_call(
+                    path_csv,
+                    date_until,
+                    old_model,
+                    models_path,
+                    cfg,
+                    config_path=config_resolved,
+                )
         elif mode == "val":
-            val_call(path_csv, date_until, old_model, models_path, cfg)
+            val_call(
+                path_csv,
+                date_until,
+                old_model,
+                models_path,
+                cfg,
+                config_path=config_resolved,
+            )
 
         LOGGER.info("cli completed mode=%s", mode)
     except DataDriftPolicyError as exc:

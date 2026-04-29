@@ -116,6 +116,7 @@ preprocessing:
         a: "EFFECTIVE_YR"
         b: "PROD_YEAR"
   default_variant: catboost_ord
+  tune_preprocess_variants: true
   variants:
     catboost_ord:
       numeric: { impute: median, scale: false }

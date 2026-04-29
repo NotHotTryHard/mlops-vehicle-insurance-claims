@@ -229,7 +229,12 @@ def stream_cleaned_batches(
     cfg = load_config(cfg_path)
     cleaner = DataCleaner.from_config(str(cfg_path))
     batch_size = int(cfg["batch"]["size"])
-    stream = db_stream(batch_size=batch_size, date_ge=date_ge, date_le=date_le)
+    stream = db_stream(
+        batch_size=batch_size,
+        date_ge=date_ge,
+        date_le=date_le,
+        config_path=str(cfg_path),
+    )
     for batch in stream:
         cleaned = cleaner.clean_batch(batch)
         if cleaned:

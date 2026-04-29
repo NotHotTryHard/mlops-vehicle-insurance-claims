@@ -340,13 +340,6 @@ def _path_relative_to_project_or_absolute(
 
 
 def run_drift_monitor(config_path: str = "config.yaml") -> dict[str, Any]:
-    """
-    Compare ``statistics_path`` (current global stats) to the frozen reference YAML.
-    Writes ``drift.report_path`` and returns the report dict.
-
-    If ``quality.drift.fail_on`` is set, may raise ``DataDriftPolicyError`` after the
-    report (including a ``handling`` section) is written.
-    """
     resolved_config_path = Path(config_path).resolve()
     config = load_config(resolved_config_path)
     drift_thresholds = drift_settings(config)
