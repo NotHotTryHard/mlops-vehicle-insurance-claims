@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 import tqdm
 
-from src.data.utils import load_config, parse_date
+from src.data.utils import load_config, parse_date, quality_round_precision
 from src.data.quality.eda import load_eda_rows_from_db, run_automatic_eda
 from src.data.quality.stats import DataStatsGlobalAnalyzer
 
@@ -68,7 +68,14 @@ def db_add_tables(
     conn = db_init(db_path)
     cur = conn.cursor()
 
-    analyzer = DataStatsGlobalAnalyzer(cfg, missing_values=(None, ""), round_precision=3, dt_col=dt_col, dt_fmt=dt_fmt)
+    round_precision = quality_round_precision(cfg)
+    analyzer = DataStatsGlobalAnalyzer(
+        cfg,
+        missing_values=(None, ""),
+        round_precision=round_precision,
+        dt_col=dt_col,
+        dt_fmt=dt_fmt,
+    )
     analyzer.merge_existing_reports(cfg, root)
     for source in data_sources:
         print(f"Streaming from {source}...")

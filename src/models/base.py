@@ -20,7 +20,7 @@ class BaseRegressor(ABC):
     def predict(self, X):
         raise NotImplementedError
 
-    def train(self, X, y, test_size=0.2, random_state=42, **fit_kwargs):
+    def train(self, X, y, *, test_size=0.2, random_state=42, **fit_kwargs):
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, random_state=random_state
         )

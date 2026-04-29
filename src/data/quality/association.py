@@ -9,6 +9,8 @@ import yaml
 from mlxtend.frequent_patterns import apriori, association_rules
 from mlxtend.preprocessing import TransactionEncoder
 
+from src.data.utils import quality_round_precision
+
 from .binarization import Binner
 
 
@@ -36,6 +38,7 @@ def _association_kwargs(cfg):
         "sample_cap_per_column": int(assoc.get("sample_cap_per_column", 25_000)),
         "max_levels_per_categorical": int(assoc.get("max_levels_per_categorical", 40)),
         "max_transactions": int(assoc.get("max_transactions", 60_000)),
+        "round_precision": quality_round_precision(cfg),
     }
 
 
@@ -180,7 +183,8 @@ def binner_and_columns_from_stats(
     num_stats = stats["numeric_features"]
     cat_stats = stats["categorical_features"]
     cat_columns = list(cat_stats.keys())
-    binner = Binner(n_bins, missing_values)
+    rp = quality_round_precision(cfg)
+    binner = Binner(n_bins, missing_values, round_precision=rp)
 
     if association_binning and association_binning.get("numeric_edges"):
         for col, edges in association_binning["numeric_edges"].items():
@@ -237,6 +241,7 @@ class AssociationRulesAnalyzer:
         max_levels_per_categorical: int = 40,
         max_transactions: int = 60000,
         target_column: str | None = None,
+        round_precision: int = 3,
     ):
         self.n_bins = n_bins
         self.min_confidence = min_confidence
@@ -266,7 +271,8 @@ class AssociationRulesAnalyzer:
             c for c in num_stats.keys() if c not in self._exclude_columns
         ]
 
-        self.binner = Binner(n_bins, missing_values)
+        self.round_precision = int(round_precision)
+        self.binner = Binner(n_bins, missing_values, round_precision=self.round_precision)
         self.transactions = []
         self._rule_antecedents = []
         self._samples: dict[str, list[float]] = defaultdict(list)
@@ -459,15 +465,16 @@ class AssociationRulesAnalyzer:
         self._rule_antecedents = []
         feat_idx = 0
 
+        rp = self.round_precision
         for _, r in rules.iterrows():
             antecedents = list(r["antecedents"])
             consequents = list(r["consequents"])
 
             rule_dict = {
                 "rule": f"{antecedents} -> {consequents}",
-                "confidence": float(r["confidence"]),
-                "lift": float(r["lift"]),
-                "support": float(r["support"]),
+                "confidence": round(float(r["confidence"]), rp),
+                "lift": round(float(r["lift"]), rp),
+                "support": round(float(r["support"]), rp),
             }
             formatted_rules.append(rule_dict)
 
@@ -485,12 +492,12 @@ class AssociationRulesAnalyzer:
             if r["confidence"] > self.rule_confidence_threshold:
                 insights.append(
                     f"Strong rule: {antecedents} -> {consequents} "
-                    f"(conf={round(r['confidence'], 3)})"
+                    f"(conf={round(r['confidence'], rp)})"
                 )
             elif r["lift"] > self.rule_lift_threshold:
                 insights.append(
                     f"Interesting dependency: {antecedents} -> {consequents} "
-                    f"(lift={round(r['lift'], 3)})"
+                    f"(lift={round(r['lift'], rp)})"
                 )
 
         return {

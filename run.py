@@ -20,31 +20,52 @@ from src.preprocessing import (
     preprocess_tune_variant_keys,
 )
 
-_MODEL_SPECS = {
-    "catboost": {
-        "family": "catboost",
-        "cls": CatBoostRegressionModel,
-        "kwargs": {},
-    },
-    "mlp": {
-        "family": "mlp",
-        "cls": MLPRegressionModel,
-        "kwargs": {"loss": "huber", "huber_delta": 1.0, "lr": 5e-4, "max_epochs": 400},
-    },
+_MODEL_REGISTRY = {
+    "catboost": {"family": "catboost", "cls": CatBoostRegressionModel},
+    "mlp": {"family": "mlp", "cls": MLPRegressionModel},
 }
 
 CONFIG_PATH = "config.yaml"
-LOG_PATH = Path("session/logs/run.log")
 LOGGER = logging.getLogger("mlops_run")
 
 
 def model_family(model_name: str) -> str:
-    return _MODEL_SPECS[model_name]["family"]
+    return _MODEL_REGISTRY[model_name]["family"]
 
 
-def build_model(model_name: str):
-    spec = _MODEL_SPECS[model_name]
-    return spec["cls"](**spec["kwargs"])
+def build_model(model_name: str, cfg: dict):
+    spec = _MODEL_REGISTRY[model_name]
+    cls = spec["cls"]
+    block = (cfg.get("models") or {}).get(model_name) or {}
+    kwargs = dict(block)
+    if model_name == "mlp" and isinstance(kwargs.get("hidden_layer_sizes"), list):
+        kwargs["hidden_layer_sizes"] = tuple(kwargs["hidden_layer_sizes"])
+    return cls(**kwargs)
+
+
+def training_validation_kwargs(cfg: dict) -> dict:
+    tv = (cfg.get("training") or {}).get("validation") or {}
+    return {
+        "test_size": float(tv.get("test_size", 0.2)),
+        "random_state": int(tv.get("random_state", 42)),
+    }
+
+
+def _logging_settings(config_path: str) -> tuple[Path, int]:
+    cfg_path = Path(config_path).resolve()
+    default = (cfg_path.parent / "session/logs/run.log", logging.INFO)
+    try:
+        cfg = load_config(cfg_path)
+        log_cfg = cfg.get("logging") or {}
+        rel = log_cfg.get("path") or "session/logs/run.log"
+        log_path = cfg_path.parent / rel
+        name = str(log_cfg.get("level", "INFO")).upper()
+        level = getattr(logging, name, None)
+        if not isinstance(level, int):
+            level = logging.INFO
+        return log_path, level
+    except Exception:
+        return default
 
 
 def resolve_incremental_parent_model(cli_old: Optional[str], cfg: dict) -> Optional[str]:
@@ -65,12 +86,14 @@ def output_variant_name(cfg: dict, family: str) -> str:
     return str(vname)
 
 
-def setup_logging() -> None:
-    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+def setup_logging(config_path: str = CONFIG_PATH) -> None:
     if LOGGER.handlers:
         return
-    LOGGER.setLevel(logging.INFO)
-    handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
+    log_path, level = _logging_settings(config_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    LOGGER.setLevel(level)
+    handler = logging.FileHandler(log_path, encoding="utf-8")
+    handler.setLevel(level)
     handler.setFormatter(
         logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
     )
@@ -97,6 +120,7 @@ def train_call(
     tune_preprocess = bool(
         (cfg.get("preprocessing") or {}).get("tune_preprocess_variants")
     )
+    val_kw = training_validation_kwargs(cfg)
 
     if tune_preprocess:
         rows, y_raw = load_train_rows_y(
@@ -123,13 +147,16 @@ def train_call(
                 y=y_raw,
                 variant_name=vk,
             )
-            trial = build_model(new_model)
+            trial = build_model(new_model, cfg)
             if family == "catboost":
                 trial_metrics = trial.train(
-                    X_try, y_try, cat_features=cat_features_from_frame(X_try)
+                    X_try,
+                    y_try,
+                    cat_features=cat_features_from_frame(X_try),
+                    **val_kw,
                 )
             else:
-                trial_metrics = trial.train(X_try, y_try)
+                trial_metrics = trial.train(X_try, y_try, **val_kw)
             rmse = float(trial_metrics["RMSE"])
             line = f"[train]   variant={vk!r} holdout RMSE={rmse:.6f}"
             print(line, flush=True)
@@ -162,11 +189,13 @@ def train_call(
         )
         vname = preprocessor.variant_key
 
-    model = build_model(new_model)
+    model = build_model(new_model, cfg)
     if family == "catboost":
-        metrics = model.train(X, y, cat_features=cat_features_from_frame(X))
+        metrics = model.train(
+            X, y, cat_features=cat_features_from_frame(X), **val_kw
+        )
     else:
-        metrics = model.train(X, y)
+        metrics = model.train(X, y, **val_kw)
 
     models_path.mkdir(parents=True, exist_ok=True)
     name = f"{new_model}_{vname}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -342,7 +371,7 @@ def val_call(
     help="Clear database and model files",
 )
 def cli(mode, path_csv, date_until, old_model, new_model, clear, drift_ref):
-    setup_logging()
+    setup_logging(CONFIG_PATH)
     LOGGER.info(
         "cli started mode=%s path_csv=%s date_until=%s old=%s new=%s clear=%s drift_ref=%s",
         mode,

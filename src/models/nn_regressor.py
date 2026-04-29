@@ -18,9 +18,14 @@ class MLPRegressionModel(BaseRegressor):
         random_state=42,
         loss="huber",
         huber_delta=1.0,
+        alpha=1e-4,
     ):
         super().__init__()
-        self.hidden_layer_sizes = hidden_layer_sizes
+        self.hidden_layer_sizes = (
+            tuple(hidden_layer_sizes)
+            if isinstance(hidden_layer_sizes, (list, tuple))
+            else hidden_layer_sizes
+        )
         self.lr = lr
         self.max_epochs = max_epochs
         self.batch_size = batch_size
@@ -29,6 +34,7 @@ class MLPRegressionModel(BaseRegressor):
         self.random_state = random_state
         self.loss = str(loss).lower()
         self.huber_delta = float(huber_delta)
+        self.alpha = float(alpha)
         self.model = self._build_model(warm_start=False)
 
     def _build_model(self, *, warm_start):
@@ -36,7 +42,7 @@ class MLPRegressionModel(BaseRegressor):
             hidden_layer_sizes=self.hidden_layer_sizes,
             activation="relu",
             solver="adam",
-            alpha=1e-4,
+            alpha=self.alpha,
             batch_size=self.batch_size,
             learning_rate_init=self.lr,
             max_iter=self.max_epochs,

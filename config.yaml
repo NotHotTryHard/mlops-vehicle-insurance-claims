@@ -40,6 +40,8 @@ data_storage:
   quality_path: "session/reports/db_quality.yaml"
 
 quality:
+  # Округление чисел во всех quality-выходах (статистика, drift YAML, EDA fallback, бины/insights).
+  round_precision: 3
   stats_thresholds:
     missing_frequency: 0.3
     nonvalid_frequency: 0.2
@@ -127,6 +129,36 @@ preprocessing:
     mlp_ord:
       numeric: { impute: median, scale: true }
       categorical: { impute: most_frequent, encode: ordinal }
+
+# Валидация при обучении (holdout внутри model.train).
+training:
+  validation:
+    type: holdout
+    test_size: 0.2
+    random_state: 42
+
+# Гиперпараметры моделей (передаются в конструкторы).
+models:
+  catboost:
+    loss_function: RMSE
+    verbose: false
+    random_seed: 42
+    iterations: 500
+  mlp:
+    hidden_layer_sizes: [64, 32]
+    lr: 0.0005
+    max_epochs: 400
+    batch_size: 256
+    patience: 15
+    val_fraction: 0.1
+    random_state: 42
+    loss: huber
+    huber_delta: 1.0
+    alpha: 0.0001
+
+logging:
+  path: "session/logs/run.log"
+  level: INFO
 
 incremental_training:
   enabled: true

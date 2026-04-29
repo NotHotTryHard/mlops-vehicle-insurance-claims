@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.data.database.db_stream import db_stream
-from src.data.utils import get_all_features, load_config
+from src.data.utils import get_all_features, load_config, quality_round_precision
 from tqdm import tqdm
 
 
@@ -56,11 +56,11 @@ def load_eda_rows_from_db(config_path: str = "config.yaml") -> list[dict]:
     return rows
 
 
-def _fallback_html_report(df: pd.DataFrame, title: str) -> str:
+def _fallback_html_report(df: pd.DataFrame, title: str, *, decimals: int) -> str:
     desc = df.describe(include="all").to_html()
     num = df.select_dtypes(include=["number"])
     if num.shape[1] > 1:
-        corr = num.corr().round(4).to_html()
+        corr = num.corr().round(decimals).to_html()
     else:
         corr = "<p>No correlation (insufficient numeric columns).</p>"
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>{title}</title></head>
@@ -85,7 +85,8 @@ def _write_eda_profile(cfg: dict, df: pd.DataFrame, config_path: str) -> str | N
             profile = ProfileReport(df, title=title, minimal=minimal)
             profile.to_file(out_path)
     except Exception as e:
-        html = _fallback_html_report(df, title)
+        rp = quality_round_precision(cfg)
+        html = _fallback_html_report(df, title, decimals=rp)
         out_path.write_text(html, encoding="utf-8")
         print(
             f"ydata-profiling skipped ({type(e).__name__}: {e}); "

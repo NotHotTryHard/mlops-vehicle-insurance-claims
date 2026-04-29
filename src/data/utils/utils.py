@@ -12,6 +12,12 @@ def load_config(config_path):
         return yaml.safe_load(f)
 
 
+def quality_round_precision(cfg: dict, default: int = 3) -> int:
+    """Decimals for rounding quality outputs (stats YAML, drift report, EDA fallback, bin labels)."""
+    q = cfg.get("quality") or {}
+    return int(q.get("round_precision", default))
+
+
 def parse_date(value, fmt, strict=True):
     if value is None:
         if strict:

@@ -56,8 +56,8 @@ class NumericBinner:
 
 
 class Binner:
-    def __init__(self, n_bins=10, missing_values=None):
-        self.numeric_binner = NumericBinner(n_bins)
+    def __init__(self, n_bins=10, missing_values=None, *, round_precision: int = 3):
+        self.numeric_binner = NumericBinner(n_bins, precision=round_precision)
         self.missing_values = missing_values if missing_values is not None else (None, "")
 
     def fit_equal_width(self, num_stats):

@@ -5,7 +5,7 @@ from typing import Any
 
 import yaml
 
-from src.data.utils import load_config
+from src.data.utils import load_config, quality_round_precision
 
 _EPS = 1e-9
 
@@ -139,6 +139,8 @@ def _rate_numeric_column_drift(
     reference_missing_frequency: float,
     current_missing_frequency: float,
     drift_thresholds: dict[str, Any],
+    *,
+    decimals: int,
 ) -> dict[str, Any]:
     mean_shift_in_sigmas = abs(current_mean - reference_mean) / max(reference_std, _EPS)
     if reference_std > _EPS:
@@ -162,9 +164,9 @@ def _rate_numeric_column_drift(
         )
     )
     return {
-        "mean_shift_sigmas": round(mean_shift_in_sigmas, 4),
-        "std_ratio": round(std_ratio, 4) if math.isfinite(std_ratio) else None,
-        "missing_frequency_delta": round(missing_frequency_delta, 4),
+        "mean_shift_sigmas": round(mean_shift_in_sigmas, decimals),
+        "std_ratio": round(std_ratio, decimals) if math.isfinite(std_ratio) else None,
+        "missing_frequency_delta": round(missing_frequency_delta, decimals),
         "severity": _drift_severity_label(has_warning, is_critical),
     }
 
@@ -175,6 +177,7 @@ def _compare_reference_and_current_statistics(
     drift_thresholds: dict[str, Any],
     *,
     excluded_column_names: set[str],
+    decimals: int,
 ) -> dict[str, Any]:
     reference_numeric_features = reference_stats.get("numeric_features") or {}
     current_numeric_features = current_stats.get("numeric_features") or {}
@@ -206,6 +209,7 @@ def _compare_reference_and_current_statistics(
             reference_missing_frequency,
             current_missing_frequency,
             drift_thresholds,
+            decimals=decimals,
         )
 
     categorical_metrics_by_column: dict[str, Any] = {}
@@ -241,8 +245,8 @@ def _compare_reference_and_current_statistics(
             )
         )
         categorical_metrics_by_column[column_name] = {
-            "js_divergence": round(jensen_shannon_divergence, 5),
-            "missing_frequency_delta": round(missing_frequency_delta, 4),
+            "js_divergence": round(jensen_shannon_divergence, decimals),
+            "missing_frequency_delta": round(missing_frequency_delta, decimals),
             "severity": _drift_severity_label(has_warning, is_critical),
         }
 
@@ -342,6 +346,7 @@ def _path_relative_to_project_or_absolute(
 def run_drift_monitor(config_path: str = "config.yaml") -> dict[str, Any]:
     resolved_config_path = Path(config_path).resolve()
     config = load_config(resolved_config_path)
+    drift_decimals = quality_round_precision(config)
     drift_thresholds = drift_settings(config)
     raw_fail_on = drift_thresholds.get("fail_on")
     if raw_fail_on not in (None, "", False) and _normalize_fail_on(raw_fail_on) is None:
@@ -388,6 +393,7 @@ def run_drift_monitor(config_path: str = "config.yaml") -> dict[str, Any]:
             current_stats,
             drift_thresholds,
             excluded_column_names=excluded_column_names,
+            decimals=drift_decimals,
         )
         severity_rank = {"ok": 0, "warn": 1, "critical": 2}
         all_column_metric_rows = list(
