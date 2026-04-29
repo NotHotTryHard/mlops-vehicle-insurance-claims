@@ -46,8 +46,11 @@ def build_model(model_name: str, cfg: dict):
 def training_validation_kwargs(cfg: dict) -> dict:
     tv = (cfg.get("training") or {}).get("validation") or {}
     return {
+        "type": str(tv.get("type", "holdout")).lower(),
         "test_size": float(tv.get("test_size", 0.2)),
         "random_state": int(tv.get("random_state", 42)),
+        "n_splits": int(tv.get("n_splits", 5)),
+        "shuffle": bool(tv.get("shuffle", True)),
     }
 
 
@@ -153,14 +156,14 @@ def train_call(
                     X_try,
                     y_try,
                     cat_features=cat_features_from_frame(X_try),
-                    **val_kw,
+                    validation=val_kw,
                 )
             else:
-                trial_metrics = trial.train(X_try, y_try, **val_kw)
+                trial_metrics = trial.train(X_try, y_try, validation=val_kw)
             rmse = float(trial_metrics["RMSE"])
-            line = f"[train]   variant={vk!r} holdout RMSE={rmse:.6f}"
+            line = f"[train]   variant={vk!r} validation RMSE={rmse:.6f}"
             print(line, flush=True)
-            LOGGER.info("preprocess sweep variant=%s holdout_RMSE=%s", vk, rmse)
+            LOGGER.info("preprocess sweep variant=%s validation_RMSE=%s", vk, rmse)
             if rmse < best_rmse:
                 best_rmse = rmse
                 best_key = vk
@@ -174,7 +177,7 @@ def train_call(
             variant_name=best_key,
         )
         LOGGER.info(
-            "selected preprocess variant=%s (best holdout RMSE=%s)",
+            "selected preprocess variant=%s (best validation RMSE=%s)",
             best_key,
             best_rmse,
         )
@@ -192,10 +195,13 @@ def train_call(
     model = build_model(new_model, cfg)
     if family == "catboost":
         metrics = model.train(
-            X, y, cat_features=cat_features_from_frame(X), **val_kw
+            X,
+            y,
+            cat_features=cat_features_from_frame(X),
+            validation=val_kw,
         )
     else:
-        metrics = model.train(X, y, **val_kw)
+        metrics = model.train(X, y, validation=val_kw)
 
     models_path.mkdir(parents=True, exist_ok=True)
     name = f"{new_model}_{vname}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"

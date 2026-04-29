@@ -15,6 +15,7 @@ class CatBoostRegressionModel(BaseRegressor):
             "iterations": 500,
         }
         params.update(kwargs)
+        self._init_kwargs = dict(params)
         self.model = CatBoostRegressor(**params)
 
     def fit(self, X, y, cat_features=None, **kwargs):

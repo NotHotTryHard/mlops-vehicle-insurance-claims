@@ -36,6 +36,18 @@ class MLPRegressionModel(BaseRegressor):
         self.huber_delta = float(huber_delta)
         self.alpha = float(alpha)
         self.model = self._build_model(warm_start=False)
+        self._init_kwargs = {
+            "hidden_layer_sizes": self.hidden_layer_sizes,
+            "lr": self.lr,
+            "max_epochs": self.max_epochs,
+            "batch_size": self.batch_size,
+            "patience": self.patience,
+            "val_fraction": self.val_fraction,
+            "random_state": self.random_state,
+            "loss": self.loss,
+            "huber_delta": self.huber_delta,
+            "alpha": self.alpha,
+        }
 
     def _build_model(self, *, warm_start):
         return MLPRegressor(
