@@ -128,5 +128,9 @@ preprocessing:
       numeric: { impute: median, scale: true }
       categorical: { impute: most_frequent, encode: ordinal }
 
+incremental_training:
+  enabled: true
+  parent_model: "mlp_mlp_ord_20260429_010035"
+
 model_storage:
   models_path: "session/models"

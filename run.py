@@ -47,6 +47,15 @@ def build_model(model_name: str):
     return spec["cls"](**spec["kwargs"])
 
 
+def resolve_incremental_parent_model(cli_old: Optional[str], cfg: dict) -> Optional[str]:
+    if cli_old is not None:
+        return cli_old.strip()
+    block = cfg.get("incremental_training") or {}
+    if block.get("enabled") and block.get("parent_model"):
+        return str(block["parent_model"]).strip()
+    return None
+
+
 def output_variant_name(cfg: dict, family: str) -> str:
     vname = (cfg.get("preprocessing") or {}).get("default_variant", "default")
     if family == "mlp" and str(vname).startswith("catboost"):
@@ -193,7 +202,15 @@ def update_call(
     cfg: dict,
     *,
     config_path: str,
+    parent_source: str = "unknown",
 ) -> None:
+    data_ref = f"path_csv={path_csv}" if path_csv is not None else f"date_until={date_until}"
+    inc_msg = (
+        f"Incremental training: parent bundle={old_model!r} "
+        f"Applying model.update() on loaded bundle."
+    )
+    print(inc_msg, flush=True)
+    LOGGER.info(inc_msg)
     LOGGER.info(
         "update_call started path_csv=%s date_until=%s old_model=%s",
         path_csv,
@@ -309,7 +326,7 @@ def val_call(
     "old_model",
     type=str,
     default=None,
-    help="Existing model name (val or train update)",
+    help="Model bundle basename without .pkl, or use incremental_training in config.yaml.",
 )
 @click.option(
     "--new",
@@ -386,16 +403,26 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear, drift_ref):
         if has_csv == has_dates:
             raise click.UsageError("Choose either --path-csv or --date-until.")
 
-        if mode == "train":
-            if (old_model is None) == (new_model is None):
-                raise click.UsageError("train requires exactly one of --new or --old.")
-        elif mode == "val":
-            if old_model is None or new_model is not None:
-                raise click.UsageError("val requires --old and no --new.")
-
         config_resolved = str(Path(CONFIG_PATH).resolve())
         cfg = load_config(config_resolved)
         models_path = Path(cfg["model_storage"]["models_path"])
+
+        train_parent: Optional[str] = None
+        if mode == "train":
+            train_parent = resolve_incremental_parent_model(old_model, cfg)
+            if new_model is not None and train_parent is not None:
+                raise click.UsageError(
+                    "train: use either --new (fresh) or incremental (--old / "
+                    "incremental_training.parent_model), not both."
+                )
+            if new_model is None and train_parent is None:
+                raise click.UsageError(
+                    "train requires --new for fresh training, or --old / "
+                    "incremental_training (enabled: true and parent_model set) for update."
+                )
+        elif mode == "val":
+            if old_model is None or new_model is not None:
+                raise click.UsageError("val requires --old and no --new.")
 
         if mode == "train":
             if new_model is not None:
@@ -411,10 +438,15 @@ def cli(mode, path_csv, date_until, old_model, new_model, clear, drift_ref):
                 update_call(
                     path_csv,
                     date_until,
-                    old_model,
+                    train_parent,
                     models_path,
                     cfg,
                     config_path=config_resolved,
+                    parent_source=(
+                        "CLI --old"
+                        if old_model is not None
+                        else "config.yaml incremental_training"
+                    ),
                 )
         elif mode == "val":
             val_call(
