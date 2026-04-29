@@ -10,13 +10,18 @@ from tqdm import tqdm
 from src.data.database import build_drift_reference, db_add_tables, db_clear, ensure_db
 from src.data.quality.drift import DataDriftPolicyError
 from src.data.utils import load_config
-from src.monitoring.model_drift import (
+from src.training.monitoring import (
     ModelDriftPolicyError,
     append_metrics_history_entry,
     record_val_model_drift,
 )
+from src.training.models import (
+    CatBoostRegressionModel,
+    MLPRegressionModel,
+    diagnose_and_choose,
+    merged_flexible_settings,
+)
 from src.data.quality.eda import load_eda_rows_from_db, run_automatic_eda
-from src.models import CatBoostRegressionModel, MLPRegressionModel
 from src.preprocessing import (
     build_train_dataset,
     build_val_dataset,
@@ -124,19 +129,45 @@ def train_call(
         date_until,
         new_model,
     )
-    family = model_family(new_model)
+    val_kw = training_validation_kwargs(cfg)
     tune_preprocess = bool(
         (cfg.get("preprocessing") or {}).get("tune_preprocess_variants")
     )
-    val_kw = training_validation_kwargs(cfg)
-
-    if tune_preprocess:
-        rows, y_raw = load_train_rows_y(
+    flex_meta: dict | None = None
+    auto = str(new_model).lower() == "auto"
+    need_rows_early = auto or tune_preprocess
+    rows_cache: list | None = None
+    y_cache = None
+    if need_rows_early:
+        rows_cache, y_cache = load_train_rows_y(
             cfg,
             config_path=config_path,
             path_csv=path_csv,
             date_until=date_until,
         )
+    if auto:
+        flex_cfg = merged_flexible_settings(cfg)
+        chosen, reason, diagnosis = diagnose_and_choose(rows_cache, cfg, flex_cfg)
+        flex_meta = {
+            "requested": "auto",
+            "resolved_model": chosen,
+            "reason": reason,
+            "diagnosis": diagnosis,
+        }
+        line = (
+            f"[train] flexible_model: auto -> {chosen!r} ({reason}); "
+            f"n_rows={diagnosis['n_rows']}, "
+            f"missing_row_frac={diagnosis['missing_row_fraction']:.3f}, "
+            f"outlier_row_frac={diagnosis['outlier_row_fraction']:.3f}"
+        )
+        print(line, flush=True)
+        LOGGER.info("%s", line)
+        new_model = chosen
+
+    family = model_family(new_model)
+
+    if tune_preprocess:
+        rows, y_raw = rows_cache, y_cache
         variant_keys = preprocess_tune_variant_keys(cfg, family)
         msg = (
             f"[train] preprocessing variant sweep: {len(variant_keys)} candidate(s) "
@@ -212,17 +243,17 @@ def train_call(
     name = f"{new_model}_{vname}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     with open(models_path / f"{name}.pkl", "wb") as f:
-        pickle.dump(
-            {
-                "model": model,
-                "preprocessor": preprocessor,
-                "variant": vname,
-                "model_name": new_model,
-                "metrics": metrics,
-                "tune_preprocess_variants": tune_preprocess,
-            },
-            f,
-        )
+        bundle_out = {
+            "model": model,
+            "preprocessor": preprocessor,
+            "variant": vname,
+            "model_name": new_model,
+            "metrics": metrics,
+            "tune_preprocess_variants": tune_preprocess,
+        }
+        if flex_meta is not None:
+            bundle_out["flexible_selection"] = flex_meta
+        pickle.dump(bundle_out, f)
 
     LOGGER.info(
         "train_call saved model=%s metrics=%s path=%s",
@@ -403,9 +434,9 @@ def val_call(
 @click.option(
     "--new",
     "new_model",
-    type=click.Choice(["catboost", "mlp"], case_sensitive=False),
+    type=click.Choice(["catboost", "mlp", "auto"], case_sensitive=False),
     default=None,
-    help="Model type (catboost | mlp)",
+    help="Model type (catboost | mlp | auto — auto picks catboost vs mlp from raw train rows).",
 )
 @click.option(
     '--clear',
